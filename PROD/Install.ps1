@@ -639,7 +639,7 @@ $Application_Name = ""          # Nom de l'application
 $Application_Version = ""       # Version de l'application Vxx.xx.xx
 $Editor = ""                    # Editeur
 $Install_Path = ""              # Install folder of the application
-$Technologie = ""               # MSI, EXE or APPX
+$Technologie = ""               # MSI, EXE, APPX, CAB or MSU
 $Arch =                         # 32 or 64
 $Kill_Process = @()             # Process to kil. If neccessary. Ex: $Kill_Process = @("chrome","iexplore","firefox")
 $Reboot_Code = 0                # 3010 for reboot
