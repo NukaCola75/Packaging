@@ -1,6 +1,6 @@
 ############################################################################################
-######################################## 18/07/2018 ########################################
-########################################   V02.10   ########################################
+######################################## 30/10/2018 ########################################
+########################################   V02.20   ########################################
 ################################## Script D'installation ###################################
 ############################################################################################
 # .Net methods - Masque la fenetre powershell
@@ -45,7 +45,7 @@ Function LOG_WRITE($Text_ToWrite, $Result_ToWrite)
 	$Time = (Get-Date -format 'HH:mm:ss')                                           #Recuperation heures/minutes/secondes
 	$LogPath = "C:\temp\sccm_logs\I_" + $Application_Name + " " + $Application_Version + ".LOG"                   #Creation du chemin + nom du log
 	$Line_ToWrite = $Time + " - " + $Text_ToWrite + "       " + $Result_ToWrite     #Concatenation du texte
-	ADD-content -path $LogPath -value "$Line_ToWrite"                               #Ecriture
+	ADD-content -path $LogPath -value "$Line_ToWrite" -Encoding UTF8                               #Ecriture
 	ADD-content -path $LogPath -value "`n"                                          #Saut de ligne
 }
 
@@ -172,10 +172,13 @@ Function CLS_REMOVEREGSIGN($App_Name, $App_Version, $Archi)
 
 	Try
 	{
-		Remove-Item $path\CLS\INVENTORY\Packages\$Reg_Name -force -ErrorAction 'SilentlyContinue'
+		If (Test-Path -path $path\CLS\INVENTORY\Packages\$Reg_Name)
+		{
+			Remove-Item $path\CLS\INVENTORY\Packages\$Reg_Name -force -ErrorAction 'SilentlyContinue'
 
-		LOG_WRITE "Suppression signature par clés de registre:" "Succes"
-		EventLog 1 Information "Suppression des signatures:" "Succes" "Suppression des anciennes clés de registre."
+			LOG_WRITE "Suppression signature par clés de registre:" "Succes"
+			EventLog 1 Information "Suppression des signatures:" "Succes" "Suppression des anciennes clés de registre."
+		}
 	}
 	Catch
 	{
@@ -185,10 +188,10 @@ Function CLS_REMOVEREGSIGN($App_Name, $App_Version, $Archi)
 }
 
 
-Function DETECT_INSTALLATION($Key_ToCheck, $File_ToCheck)
+Function DETECT_INSTALLATION($Key_ToCheck, $File_ToCheck, $regPart)
 {
 		# Verification présence ou non + Installation si besoin
-	If ($Arch -eq 32)                           #Definition path registre 32/64
+	If ($regPart -eq 32)                           #Definition path registre 32/64
 	{
 		If ($Installtype -eq "SYSTEM")
 		{
@@ -302,10 +305,10 @@ Function DETECT_APPX($Name)
 	$Global:AppxFullName = ($Global:scanAppx).PackageFullName
 }
 
-Function EXECUTE_INSTALLATION_MSI($InstallFile, $Transform, $InstallParameters, $Registry_Key, $File_Check, $Tempo) 
+Function EXECUTE_INSTALLATION_MSI($InstallFile, $Transform, $InstallParameters, $Registry_Key, $File_Check, $Tempo, $regPart) 
 {
 	# Verification présence ou non + Installation si besoin
-	DETECT_INSTALLATION $Registry_Key $File_Check
+	DETECT_INSTALLATION $Registry_Key $File_Check $regPart
 
 	if ($Global:Err_Return -eq 0)
 	{
@@ -323,7 +326,7 @@ Function EXECUTE_INSTALLATION_MSI($InstallFile, $Transform, $InstallParameters, 
 
 			Start-Sleep -s $Tempo                                                                       #Attente supplementaire requis
 
-			DETECT_INSTALLATION $Registry_Key $File_Check
+			DETECT_INSTALLATION $Registry_Key $File_Check $regPart
 
 			if (($Global:FileDetect -eq $true) -OR ($Global:KeyDetect -eq $true) -OR ($Global:Key_ToCheck_isEmpty -eq $true -AND $Global:File_ToCheck_isEmpty -eq $true)) 
 			{
@@ -346,10 +349,10 @@ Function EXECUTE_INSTALLATION_MSI($InstallFile, $Transform, $InstallParameters, 
 }
 
 
-Function EXECUTE_PATCH_MSI($InstallFile, $InstallParameters, $Registry_Key, $File_Check, $Tempo) 
+Function EXECUTE_PATCH_MSI($InstallFile, $InstallParameters, $Registry_Key, $File_Check, $Tempo, $regPart) 
 {
 	# Verification présence ou non + Installation si besoin
-	DETECT_INSTALLATION $Registry_Key $File_Check
+	DETECT_INSTALLATION $Registry_Key $File_Check $regPart
 
 	if ($Global:Err_Return -eq 0) 
 	{
@@ -367,7 +370,7 @@ Function EXECUTE_PATCH_MSI($InstallFile, $InstallParameters, $Registry_Key, $Fil
 
 			Start-Sleep -s $Tempo                                                                       #Attente supplementaire requis
 
-			DETECT_INSTALLATION $Registry_Key $File_Check
+			DETECT_INSTALLATION $Registry_Key $File_Check $regPart
 
 			if (($Global:FileDetect -eq $true) -OR ($Global:KeyDetect -eq $true) -OR ($Global:Key_ToCheck_isEmpty -eq $true -AND $Global:File_ToCheck_isEmpty -eq $true)) 
 			{
@@ -390,10 +393,10 @@ Function EXECUTE_PATCH_MSI($InstallFile, $InstallParameters, $Registry_Key, $Fil
 }
 
 
-Function EXECUTE_INSTALLATION_EXE($InstallFile, $InstallParameters, $Registry_Key, $File_Check, $Tempo) 
+Function EXECUTE_INSTALLATION_EXE($InstallFile, $InstallParameters, $Registry_Key, $File_Check, $Tempo, $regPart) 
 {
 	# Verification présence ou non + Installation si besoin
-	DETECT_INSTALLATION $Registry_Key $File_Check
+	DETECT_INSTALLATION $Registry_Key $File_Check $regPart
 	
 	if ($Global:Err_Return -eq 0) 
 	{
@@ -409,7 +412,7 @@ Function EXECUTE_INSTALLATION_EXE($InstallFile, $InstallParameters, $Registry_Ke
 
 			Start-Sleep -s $Tempo                                                                           #Attente supplementaire requis
 
-			DETECT_INSTALLATION $Registry_Key $File_Check
+			DETECT_INSTALLATION $Registry_Key $File_Check $regPart
 
 			if (($Global:FileDetect -eq $true) -OR ($Global:KeyDetect -eq $true) -OR ($Global:Key_ToCheck_isEmpty -eq $true -AND $Global:File_ToCheck_isEmpty -eq $true)) 
 			{
@@ -527,10 +530,10 @@ Function EXECUTE_INSTALLATION_MSU($InstallExec)
 }
 
 
-Function EXECUTE_MIGRATION_MSI($Product_Code, $Parameters, $Registry_Key, $File_Check, $Tempo)
+Function EXECUTE_MIGRATION_MSI($Product_Code, $Parameters, $Registry_Key, $File_Check, $Tempo, $regPart)
 {
 	# Verification présence V N-1, N-2 etc... ou non + désinstallation si besoin
-	DETECT_INSTALLATION $Registry_Key $File_Check
+	DETECT_INSTALLATION $Registry_Key $File_Check $regPart
 
 	if ($Global:Err_Return -eq 0) 
 	{
@@ -548,7 +551,7 @@ Function EXECUTE_MIGRATION_MSI($Product_Code, $Parameters, $Registry_Key, $File_
 
 			Start-Sleep -s $Tempo                                                                           #Attente supplementaire requis
 
-			DETECT_INSTALLATION $Registry_Key $File_Check
+			DETECT_INSTALLATION $Registry_Key $File_Check $regPart
 
 			if (($Global:FileDetect -eq $false -AND $Global:KeyDetect -eq $false) -OR ($Global:Key_ToCheck_isEmpty -eq $true -AND $Global:File_ToCheck_isEmpty -eq $true)) 
 			{
@@ -571,10 +574,10 @@ Function EXECUTE_MIGRATION_MSI($Product_Code, $Parameters, $Registry_Key, $File_
 }
 
 
-Function EXECUTE_MIGRATION_EXE($RemoveExe, $Parameters, $Registry_Key, $File_Check, $Tempo)
+Function EXECUTE_MIGRATION_EXE($RemoveExe, $Parameters, $Registry_Key, $File_Check, $Tempo, $regPart)
 {
 	# Verification présence V N-1, N-2 etc... ou non + désinstallation si besoin
-	DETECT_INSTALLATION $Registry_Key $File_Check
+	DETECT_INSTALLATION $Registry_Key $File_Check $regPart
 
 	if ($Global:Err_Return -eq 0) 
 	{
@@ -590,7 +593,7 @@ Function EXECUTE_MIGRATION_EXE($RemoveExe, $Parameters, $Registry_Key, $File_Che
 
 			Start-Sleep -s $Tempo                                                                           #Attente supplementaire requis
 
-			DETECT_INSTALLATION $Registry_Key $File_Check
+			DETECT_INSTALLATION $Registry_Key $File_Check $regPart
 
 			if (($Global:FileDetect -eq $false -AND $Global:KeyDetect -eq $false) -OR ($Global:Key_ToCheck_isEmpty -eq $true -AND $Global:File_ToCheck_isEmpty -eq $true)) 
 			{
@@ -697,15 +700,15 @@ KILL_PROCESS $Kill_Process
 
 		# Bloc de désinstallation/Migration
 		#EXECUTE_MIGRATION "EXECUTABLE" "ARGUMENTS" "REGISTRY KEYS" "FILE CHECK" "TEMPO"
-#EXECUTE_MIGRATION_EXE "C:\Program Files\Mozilla Firefox\uninstall\helper.exe" "/S" "" "C:\Program Files\Mozilla Firefox\firefox.exe=57.0.2" 0
-#EXECUTE_MIGRATION_MSI "{23170F69-40C1-2702-1801-000001000000}" "/qn /l* `"C:\temp\sccm_logs\Remove_7ZIP V18.01.log`"" "{23170F69-40C1-2702-1801-000001000000}" "" 0
+#EXECUTE_MIGRATION_EXE "C:\Program Files\Mozilla Firefox\uninstall\helper.exe" "/S" "" "C:\Program Files\Mozilla Firefox\firefox.exe=57.0.2" 0 32
+#EXECUTE_MIGRATION_MSI "{23170F69-40C1-2702-1801-000001000000}" "/qn /l* `"C:\temp\sccm_logs\Remove_7ZIP V18.01.log`"" "{23170F69-40C1-2702-1801-000001000000}" "" 0 64
 
-# Made by .MSI
 
 If ($Global:Err_Return -eq 0)
 {
 	### Execute other actions: Suppress file, shortcuts...
-	CLS_REMOVEREGSIGN "N-X APPLICATION NAME" "APP VERSION" $Arch
+	CLS_REMOVEREGSIGN "APP NAME" "APP VERSION" $Arch
+
 }
 
 ######################################## Fin Migration ########################################
@@ -715,16 +718,17 @@ If ($Global:Err_Return -eq 0)
 
 		#Bloc d'installation
 
-		### EXECUTE_INSTALLATION_EXE "EXECUTABLE" "ARGUMENTS" "REGISTRY KEYS" "FILE CHECK" "TEMPO"
-		### EXECUTE_INSTALLATION_MSI "EXECUTABLE" "TRANSFORM" "ARGUMENTS" "REGISTRY KEYS" "FILE CHECK" "TEMPO"
-		### EXECUTE_PATCH_MSI "EXECUTABLE" "ARGUMENTS" "REGISTRY KEYS" "FILE CHECK" "TEMPO"
+		### EXECUTE_INSTALLATION_EXE "EXECUTABLE" "ARGUMENTS" "REGISTRY KEYS" "FILE CHECK" "TEMPO" "ARCH"
+		### EXECUTE_INSTALLATION_MSI "EXECUTABLE" "TRANSFORM" "ARGUMENTS" "REGISTRY KEYS" "FILE CHECK" "TEMPO" "ARCH"
+		### EXECUTE_PATCH_MSI "EXECUTABLE" "ARGUMENTS" "REGISTRY KEYS" "FILE CHECK" "TEMPO" "ARCH"
 		### EXECUTE_INSTALLATION_APPX "EXECUTABLE" "PKG Name" "PKG Version"
 
-#EXECUTE_INSTALLATION_MSI "7ZIP V18.01.msi" "" "/qn /l* `"C:\temp\sccm_logs\Install_7ZIP V18.01.log`"" "{23170F69-40C1-2702-1801-000001000000}" "" 0
-#EXECUTE_INSTALLATION_EXE "Firefox V57.0.02.exe" " /S" "" "C:\Program Files\Mozilla Firefox\firefox.exe=57.0.2" 0        
+#EXECUTE_INSTALLATION_MSI "7ZIP V18.01.msi" "" "/qn /l* `"C:\temp\sccm_logs\Install_7ZIP V18.01.log`"" "{23170F69-40C1-2702-1801-000001000000}" "" 0 64
+#EXECUTE_INSTALLATION_EXE "Firefox V57.0.02.exe" " /S" "" "C:\Program Files\Mozilla Firefox\firefox.exe=57.0.2" 0 32        
 #EXECUTE_INSTALLATION_APPX "CheckPointVPN_1.0.14.0_x64.Appx" "B4D42709.CheckPointVPN" 1.0.14.0
 #EXECUTE_INSTALLATION_CAB "moncab.CAB"
 #EXECUTE_INSTALLATION_MSU "monkb.MSU"
+
 
 If ($Global:Err_Return -eq 0)
 {

@@ -1,6 +1,6 @@
 ############################################################################################
-######################################## 18/07/2018 ########################################
-########################################   V02.10   ########################################
+######################################## 30/10/2018 ########################################
+########################################   V02.20   ########################################
 ################################ Script de déinstallation ##################################
 ############################################################################################
 # .Net methods - Masque la fenetre powershell
@@ -45,7 +45,7 @@ Function LOG_WRITE($Text_ToWrite, $Result_ToWrite)
     $Time = (Get-Date -format 'HH:mm:ss')
     $LogPath = "C:\temp\sccm_logs\R_" + $Application_Name + " " + $Application_Version + ".LOG"                    #Creation du chemin + nom du log
     $Line_ToWrite = $Time + " - " + $Text_ToWrite + "       " + $Result_ToWrite     #Concatenation du texte
-    ADD-content -path $LogPath -value "$Line_ToWrite"                               #Ecriture
+    ADD-content -path $LogPath -value "$Line_ToWrite" -Encoding UTF8                                #Ecriture
     ADD-content -path $LogPath -value "`n"                                          #Ecriture
 }
 
@@ -120,10 +120,13 @@ Function CLS_REMOVEREGSIGN($App_Name, $App_Version, $Archi)
 
     Try
     {
-        Remove-Item $path\CLS\INVENTORY\Packages\$Reg_Name -force -ErrorAction 'SilentlyContinue'
-                
-        LOG_WRITE "Suppression signature par clés de registre:" "Succes"
-        EventLog 1 Information "Suppression des signatures:" "Succes" "Suppression des anciennes clés de registre."
+        If (Test-Path -path $path\CLS\INVENTORY\Packages\$Reg_Name)
+		{
+			Remove-Item $path\CLS\INVENTORY\Packages\$Reg_Name -force -ErrorAction 'SilentlyContinue'
+
+			LOG_WRITE "Suppression signature par clés de registre:" "Succes"
+			EventLog 1 Information "Suppression des signatures:" "Succes" "Suppression des anciennes clés de registre."
+        }
     }
     Catch
     {
@@ -133,10 +136,10 @@ Function CLS_REMOVEREGSIGN($App_Name, $App_Version, $Archi)
 }
 
 
-Function DETECT_INSTALLATION($Key_ToCheck, $File_ToCheck) 
+Function DETECT_INSTALLATION($Key_ToCheck, $File_ToCheck, $regPart) 
 {
         # Verification présence ou non + Installation si besoin
-    If ($Arch -eq 32)                           #Definition path registre 32/64
+    If ($regPart -eq 32)                           #Definition path registre 32/64
     {
         If ($Installtype -eq "SYSTEM")
         {
@@ -285,10 +288,10 @@ Function EXECUTE_UNINSTALL_APPX($InstallName)
 }
 
 
-Function EXECUTE_UNINSTALL_MSI($Product_Code, $Parameters, $Registry_Key, $File_Check, $Tempo)
+Function EXECUTE_UNINSTALL_MSI($Product_Code, $Parameters, $Registry_Key, $File_Check, $Tempo, $regPart)
 {
     # Verification présence V N-1, N-2 etc... ou non + désinstallation si besoin
-    DETECT_INSTALLATION $Registry_Key $File_Check
+    DETECT_INSTALLATION $Registry_Key $File_Check $regPart
     
     if ($Global:Err_Return -eq 0) 
     {
@@ -306,7 +309,7 @@ Function EXECUTE_UNINSTALL_MSI($Product_Code, $Parameters, $Registry_Key, $File_
 
             Start-Sleep -s $Tempo
 
-            DETECT_INSTALLATION $Registry_Key $File_Check
+            DETECT_INSTALLATION $Registry_Key $File_Check $regPart
 
             if (($Global:FileDetect -eq $false -AND $Global:KeyDetect -eq $false) -OR ($Global:Key_ToCheck_isEmpty -eq $true -AND $Global:File_ToCheck_isEmpty -eq $true))
             {
@@ -329,10 +332,10 @@ Function EXECUTE_UNINSTALL_MSI($Product_Code, $Parameters, $Registry_Key, $File_
 }
 
 
-Function EXECUTE_UNINSTALL_EXE($RemoveExe, $Parameters, $Registry_Key, $File_Check, $Tempo)
+Function EXECUTE_UNINSTALL_EXE($RemoveExe, $Parameters, $Registry_Key, $File_Check, $Tempo, $regPart)
 {
     # Verification présence V N-1, N-2 etc... ou non + désinstallation si besoin
-    DETECT_INSTALLATION $Registry_Key $File_Check
+    DETECT_INSTALLATION $Registry_Key $File_Check $regPart
     
     if ($Global:Err_Return -eq 0) 
     {
@@ -349,7 +352,7 @@ Function EXECUTE_UNINSTALL_EXE($RemoveExe, $Parameters, $Registry_Key, $File_Che
 
             Start-Sleep -s $Tempo
 
-            DETECT_INSTALLATION $Registry_Key $File_Check
+            DETECT_INSTALLATION $Registry_Key $File_Check $regPart
 
             if (($Global:FileDetect -eq $false -AND $Global:KeyDetect -eq $false) -OR ($Global:Key_ToCheck_isEmpty -eq $true -AND $Global:File_ToCheck_isEmpty -eq $true)) 
             {
@@ -452,9 +455,9 @@ KILL_PROCESS $Kill_Process
 ######################################## UNINSTALL ########################################
 
         # Bloc de désinstallation/Migration
-#EXECUTE_UNINSTALL "EXECUTABLE" "ARGUMENTS" "REGISTRY KEYS" "FILE CHECK" "TEMPO"
-#EXECUTE_UNINSTALL_EXE "C:\Program Files\Mozilla Firefox\uninstall\helper.exe" "/S" "" "C:\Program Files\Mozilla Firefox\firefox.exe=57.0.2" 0
-#EXECUTE_UNINSTALL_MSI "{23170F69-40C1-2702-1801-000001000000}" "/qn /l* `"C:\temp\sccm_logs\Remove_7ZIP V18.01.log`"" "{23170F69-40C1-2702-1801-000001000000}" "" 0
+#EXECUTE_UNINSTALL "EXECUTABLE" "ARGUMENTS" "REGISTRY KEYS" "FILE CHECK" "TEMPO" "ARCHI"
+#EXECUTE_UNINSTALL_EXE "C:\Program Files\Mozilla Firefox\uninstall\helper.exe" "/S" "" "C:\Program Files\Mozilla Firefox\firefox.exe=57.0.2" 0 32
+#EXECUTE_UNINSTALL_MSI "{23170F69-40C1-2702-1801-000001000000}" "/qn /l* `"C:\temp\sccm_logs\Remove_7ZIP V18.01.log`"" "{23170F69-40C1-2702-1801-000001000000}" "" 0 64
 #EXECUTE_UNINSTALL_APPX "B4D42709.CheckPointVPN"
 
 
