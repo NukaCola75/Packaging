@@ -728,7 +728,7 @@ KILL_PROCESS $Kill_Process
 
 # Bloc for Uninstall/Migration
 #EXECUTE_MIGRATION_EXE "C:\Program Files\Mozilla Firefox\uninstall\helper.exe" "/S" "REG KEY" "C:\Program Files\Mozilla Firefox\firefox.exe=57.0.2" 0 32
-#EXECUTE_MIGRATION_MSI "PRODUCT CODE or MSI FILE" "TRANSFORM" "/qn /l* `"C:\temp\sccm_logs\Remove_7ZIP V18.01.log`"" "PRODUCT CODE" "REG KEY" "FILE" 0 64
+#EXECUTE_MIGRATION_MSI "PRODUCT CODE or MSI FILE" "/qn /l* `"C:\temp\sccm_logs\Remove_7ZIP V18.01.log`"" "PRODUCT CODE" "REG KEY" "FILE" 0 64
 
 
 If ($Global:Err_Return -eq 0)

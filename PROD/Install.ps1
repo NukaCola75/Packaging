@@ -1,7 +1,7 @@
 ############################################################################################
-######################################## 30/10/2018 ########################################
-########################################   V02.20   ########################################
-################################## Script D'installation ###################################
+######################################## 27/02/2019 ########################################
+########################################   V03.00   ########################################
+#################################### Installation Script ###################################
 ############################################################################################
 # .Net methods - Masque la fenetre powershell
 #Add-Type -Name Window -Namespace Console -MemberDefinition '
@@ -19,84 +19,86 @@
 #}
 #Hide-Console 0
 
-######################################## Déclaration des variables GLOBALE ########################################
+######################################## BEGIN GLOBAL variables declaration ########################################
 
 
-$OSVersion = [Environment]::OSVersion                           #Detection de la version de Windows
-$OSLang = Get-Culture                                           #Detection de la langue de Windows
-$InstallDate = Get-Date                                         #Detection de la date du debut de l'installation
-$user = [Environment]::UserName                                 #Detection username
+$ScriptVersion = "V03.00 - 27/02/2019"
+$OSVersion = [Environment]::OSVersion                           # Detect Windows version
+$OSLang = Get-Culture                                           # Detect Windows language
+$InstallDate = Get-Date                                         # Get current date
+$user = [Environment]::UserName                                 # Detect current username
 
-$Global:Err_Return = 0                                          #Fixe Err_Return a 0
-$CurrentPath = Get-Location                                     #Recupere le repertoire courrant
-$PathExecute = (Convert-Path $CurrentPath)                      #Convertit le resultat pour exploitation
+$Global:Err_Return = 0                                          # Error variable
+$CurrentPath = Get-Location                                     # Get current directory
+$PathExecute = (Convert-Path $CurrentPath)                      # Convert current directory
 
 
-######################################## Fin de déclaration des variables GLOBALE ########################################
+######################################## END GLOBAL variables declaration ########################################
 
 #########################################################################################
-######################################## Fonctions ######################################
+######################################## Functions ######################################
 #########################################################################################
 
 
+# Writing in log file
 Function LOG_WRITE($Text_ToWrite, $Result_ToWrite)
 {
-	# Ecriture dans le fichier log
-	$Time = (Get-Date -format 'HH:mm:ss')                                           #Recuperation heures/minutes/secondes
-	$LogPath = "C:\temp\sccm_logs\I_" + $Application_Name + " " + $Application_Version + ".LOG"                   #Creation du chemin + nom du log
-	$Line_ToWrite = $Time + " - " + $Text_ToWrite + "       " + $Result_ToWrite     #Concatenation du texte
-	ADD-content -path $LogPath -value "$Line_ToWrite" -Encoding UTF8                               #Ecriture
-	ADD-content -path $LogPath -value "`n"                                          #Saut de ligne
+	$Time = (Get-Date -format 'HH:mm:ss')
+	$LogPath = "C:\temp\sccm_logs\I_" + $Application_Name + " " + $Application_Version + ".LOG"
+	$Line_ToWrite = $Time + " - " + $Text_ToWrite + "       " + $Result_ToWrite
+	ADD-content -path $LogPath -value "$Line_ToWrite" -Encoding UTF8
+	ADD-content -path $LogPath -value "`n"
 }
 
 
-function EventLog($EventCat, $ErrorType, $Step, $Result, $ErrorText)
+# Write in events observer (Only for SYSTEM installation - Require admin rights)
+function WriteInEventLog($EventCat, $ErrorType, $Step, $Result, $ErrorText)
 {
 	If ($Installtype -eq "SYSTEM")
 	{
-		#Ecriture dans l'observateur des evenements
-		$EventMessage = "Step: $Step.`n Action: $Result `r Error Type: $ErrorText"                                                          #Concatenation
-		Write-EventLog –LogName "CLS_Script" –Source $Global:SourceName –EntryType $ErrorType –EventID $EventCat –Message $EventMessage     #Ecriture
+		$EventMessage = "Step: $Step.`n Action: $Result `r Error Type: $ErrorText"
+		Write-EventLog –LogName "CLS_Script" –Source $Global:SourceName –EntryType $ErrorType –EventID $EventCat –Message $EventMessage
 	}
 }
 
 
+# Evaluate computer status
 Function EVALUATE_COMPUTER()
 {
-	LOG_WRITE "Installation date:" $InstallDate                     #Ecriture log
+	LOG_WRITE "Installation date:" $InstallDate
+	LOG_WRITE "Install script version:" $ScriptVersion
 	LOG_WRITE "User Account:" $user
-	LOG_WRITE "OS Version:" $OSVersion                              #Ecriture log
-	LOG_WRITE "OS Langage:" $OSLang                                 #Ecriture log
+	LOG_WRITE "OS Version:" $OSVersion
+	LOG_WRITE "OS Langage:" $OSLang
 	LOG_WRITE "Install from:" $PathExecute
 }
 
 
+# Kill required process
 Function KILL_PROCESS($Process_ToKill)
 {
-	# Processus a tuer
 	Foreach ($process in $Process_ToKill)
 	{
-		LOG_WRITE "Processus a tuer:" $process
-		EventLog 1 Information "Kill process" $Process "Process to kill."
+		LOG_WRITE "Process to kill:" $process
+		WriteInEventLog 1 Information "Kill process" $Process "Process to kill."
 		Try 
 		{
-			Stop-Process -name $process -force -ErrorAction 'SilentlyContinue'                      #Fermeture des process
+			Stop-Process -name $process -force -ErrorAction 'SilentlyContinue'
 		}
 		Catch [Microsoft.PowerShell.Commands.ProcessCommandException]
 		{
-			LOG_WRITE "Processus inactif:" $process
-			EventLog 1 Information "Kill process" $Process_ToKill "Inactive Process."
+			LOG_WRITE "Inactive process:" $process
+			WriteInEventLog 1 Information "Kill process" $Process_ToKill "Inactive Process."
 		}
 	}
 }
 
 
+# Sign the application for inventory
 Function CLS_SETREGSIGN($App_Name, $App_Version, $App_Editor, $Install_Dir, $Techno, $Archi)
 {
-	# Signature du package par clés de registre
-
 	$Reg_Name = $App_Name + " " + $App_Version
-	If ($Archi -eq 32)                              #Definition du chemin en fonction de l'architecture de l'appli
+	If ($Archi -eq 32)
 	{
 		If ($Installtype -eq "SYSTEM")
 		{
@@ -132,22 +134,22 @@ Function CLS_SETREGSIGN($App_Name, $App_Version, $App_Editor, $Install_Dir, $Tec
 		new-itemproperty -path $path\CLS\INVENTORY\Packages\$Reg_Name -name "Publisher" -value $App_Editor -ErrorAction 'SilentlyContinue'
 		new-itemproperty -path $path\CLS\INVENTORY\Packages\$Reg_Name -name "Version" -value $App_Version -ErrorAction 'SilentlyContinue'
 
-		LOG_WRITE "Signature par clés de registre:" "Succes"
-		EventLog 1 Information "Signature par clés de registre:" "Succes" "Registry keys registered."
+		LOG_WRITE "Signed by registry key:" "Success"
+		WriteInEventLog 1 Information "Signed by registry key:" "Success" "Application registered."
 	}
 	Catch
 	{
-		LOG_WRITE "Signature par clés de registre:" "Erreur"
-		EventLog 3 Error "Signature par clés de registre:" "Erreur" "Error on registry keys."
+		LOG_WRITE "Signed by registry key:" "Fail"
+		WriteInEventLog 3 Error "Signed by registry key:" "Fail" "Application not registered."
 	}
 }
 
 
+# Remove the application signature for inventory
 Function CLS_REMOVEREGSIGN($App_Name, $App_Version, $Archi)
 {
-	# Suppression des anciennes signatures
 	$Reg_Name = $App_Name + " " + $App_Version
-	If ($Archi -eq 32)                              #Definition du chemin en fonction de l'architecture de l'appli
+	If ($Archi -eq 32)
 	{
 		If ($Installtype -eq "SYSTEM")
 		{
@@ -176,46 +178,44 @@ Function CLS_REMOVEREGSIGN($App_Name, $App_Version, $Archi)
 		{
 			Remove-Item $path\CLS\INVENTORY\Packages\$Reg_Name -force -ErrorAction 'SilentlyContinue'
 
-			LOG_WRITE "Suppression signature par clés de registre:" "Succes"
-			EventLog 1 Information "Suppression des signatures:" "Succes" "Suppression des anciennes clés de registre."
+			LOG_WRITE "Remove application signature:" "Success"
+			WriteInEventLog 1 Information "Remove application signature:" "Success" "Application signature removed."
 		}
 	}
 	Catch
 	{
-		LOG_WRITE "Suppression signature par clés de registre:" "Erreur"
-		EventLog 3 Error "Suppression des signatures:" "Error" "Suppression des anciennes clés de registre."
+		LOG_WRITE "Remove application signature:" "Fail"
+		WriteInEventLog 3 Error "Remove application signature:" "Fail" "Application signature not removed."
 	}
 }
 
 
-Function DETECT_INSTALLATION($Key_ToCheck, $File_ToCheck, $regPart)
+# Detect application on the computer
+Function DETECT_INSTALLATION($ProductCode_ToCheck, $Key_ToCheck, $File_ToCheck, $regPart)
 {
-		# Verification présence ou non + Installation si besoin
-	If ($regPart -eq 32)                           #Definition path registre 32/64
+	########## For MSI product code ##########
+	If ([string]::IsNullOrEmpty($ProductCode_ToCheck))
 	{
-		If ($Installtype -eq "SYSTEM")
-		{
-			$CurrentV = "HKLM:\SOFTWARE\WOW6432Node\Microsoft\Windows\CurrentVersion\Uninstall\"
-		}
-		else
-		{
-			$CurrentV = "HKCU:\Software\Microsoft\Windows\CurrentVersion\Uninstall\"
-		}
+		$Global:ProductCodeCheck = $false
+		$Global:ProductCodeDetect = $false
+		$Global:ProductCode_ToCheck_isEmpty = $true
 	}
 	Else
 	{
-		If ($Installtype -eq "SYSTEM")
+		$Global:ProductCodeCheck = $true
+		$TestProductCode = Get-WmiObject -Class win32_product | Where-Object IdentifyingNumber -eq $ProductCode_ToCheck
+		If ($TestProductCode)
 		{
-			$CurrentV = "HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\"
+			$Global:ProductCodeDetect = $true
 		}
 		else
 		{
-			$CurrentV = "HKCU:\Software\Microsoft\Windows\CurrentVersion\Uninstall\"
+			$Global:ProductCodeDetect = $false
 		}
 	}
 
-	$regkey = $CurrentV + $Key_ToCheck         #Concatenation clé registre + path
 
+	########## For registry key ##########
 	If ([string]::IsNullOrEmpty($Key_ToCheck)) #Verification si la cle registre est renseignee
 	{
 		$Global:RegCheck = $false
@@ -224,8 +224,32 @@ Function DETECT_INSTALLATION($Key_ToCheck, $File_ToCheck, $regPart)
 	}
 	Else
 	{
+		If ($regPart -eq 32)
+		{
+			If ($Installtype -eq "SYSTEM")
+			{
+				$CurrentV = "HKLM:\SOFTWARE\WOW6432Node\Microsoft\Windows\CurrentVersion\Uninstall\"
+			}
+			else
+			{
+				$CurrentV = "HKCU:\Software\Microsoft\Windows\CurrentVersion\Uninstall\"
+			}
+		}
+		Else
+		{
+			If ($Installtype -eq "SYSTEM")
+			{
+				$CurrentV = "HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\"
+			}
+			else
+			{
+				$CurrentV = "HKCU:\Software\Microsoft\Windows\CurrentVersion\Uninstall\"
+			}
+		}
+		$regkey = $CurrentV + $Key_ToCheck
+
 		$Global:RegCheck = $true
-		$KeyExist = Test-Path $regkey           #Verification existance cle
+		$KeyExist = Test-Path $regkey
 
 		If ($KeyExist -eq $true)
 		{
@@ -237,7 +261,8 @@ Function DETECT_INSTALLATION($Key_ToCheck, $File_ToCheck, $regPart)
 		}
 	}
 
-	If ([string]::IsNullOrEmpty($File_ToCheck))   #Verification si fichier a verifier est fournit
+	########## For file ##########
+	If ([string]::IsNullOrEmpty($File_ToCheck))
 	{
 		$Global:FileCheck = $false
 		$Global:FileDetect = $false
@@ -246,25 +271,25 @@ Function DETECT_INSTALLATION($Key_ToCheck, $File_ToCheck, $regPart)
 	Else
 	{
 		$Global:FileCheck = $true
-		$PosLastAntiSlash = $File_ToCheck.LastIndexOf("\")        #Detecte derniere occurence "\" dans le path
-		$file = $File_ToCheck.Substring($PosLastAntiSlash+1)      #Coupe a partir de la dernière "\" pour obtenir le nom fichier
-		$filepath = $File_ToCheck.Substring(0, $PosLastAntiSlash) #Obtient le path sans non de fichier
+		$PosLastAntiSlash = $File_ToCheck.LastIndexOf("\")
+		$file = $File_ToCheck.Substring($PosLastAntiSlash+1)
+		$filepath = $File_ToCheck.Substring(0, $PosLastAntiSlash)
 
-		If (($file).Contains("=") -eq $true)                   #Verifie si présence "=2.255.22" check versioning
+		If (($file).Contains("=") -eq $true)
 		{
-			$Fsplit = $file.Split("=")                          #Coupe a partir du "=" et supprime le "="
-			$FileName = $Fsplit[0]                              #Avant "=" : nom fichier + extension
-			$FileVersion = $Fsplit[1]                           #Après "=" : version fichier
+			$Fsplit = $file.Split("=")
+			$FileName = $Fsplit[0]
+			$FileVersion = $Fsplit[1]
 		}
 		Else
 		{
-			$FileName = $file                                   #Si versioning non présent: nom fichier sans découpe
+			$FileName = $file
 		}
 
-		If ([string]::IsNullOrEmpty($FileVersion))              #Verifie si versionning present
+		If ([string]::IsNullOrEmpty($FileVersion))
 		{
 			$TestFile = Test-Path $File_ToCheck
-			If ($TestFile -eq $True)                            #Verifie existence du fichier sur le pc
+			If ($TestFile -eq $True)
 			{
 				$Global:FileDetect = $true
 			}
@@ -273,13 +298,13 @@ Function DETECT_INSTALLATION($Key_ToCheck, $File_ToCheck, $regPart)
 				$Global:FileDetect = $false
 			}
 		}
-		Else                                                    #Si versionning non present
+		Else
 		{
-			$Filename_AndPath = $filepath + "\" + $filename                 #Concatenation path + nom fichier
-			If ((Test-Path $Filename_AndPath) -eq $True)                    #Si fichier existant sur le pc
+			$Filename_AndPath = $filepath + "\" + $filename
+			If ((Test-Path $Filename_AndPath) -eq $True)
 			{
-				$InstalledFileVersion = ([System.Diagnostics.FileVersionInfo]::GetVersionInfo($Filename_AndPath).FileVersion)       #Récupération version du fichier sur pc
-				If ($InstalledFileVersion -eq $FileVersion)                 #Comparaison version theorique et version effective
+				$InstalledFileVersion = ([System.Diagnostics.FileVersionInfo]::GetVersionInfo($Filename_AndPath).FileVersion)
+				If ($InstalledFileVersion -eq $FileVersion)
 				{
 					$Global:FileDetect = $true
 				}
@@ -296,6 +321,8 @@ Function DETECT_INSTALLATION($Key_ToCheck, $File_ToCheck, $regPart)
 	}
 }
 
+
+# Detect APPX application (Windows Store)
 Function DETECT_APPX($Name)
 {
 	$Global:scanAppx = (Get-AppxPackage -Name $Name -User $user)
@@ -305,136 +332,135 @@ Function DETECT_APPX($Name)
 	$Global:AppxFullName = ($Global:scanAppx).PackageFullName
 }
 
-Function EXECUTE_INSTALLATION_MSI($InstallFile, $Transform, $InstallParameters, $Registry_Key, $File_Check, $Tempo, $regPart) 
+
+# Install MSI file
+Function EXECUTE_INSTALLATION_MSI($InstallFile, $Transform, $InstallParameters, $ProductCode, $Registry_Key, $File_Check, $Tempo, $regPart) 
 {
-	# Verification présence ou non + Installation si besoin
-	DETECT_INSTALLATION $Registry_Key $File_Check $regPart
+	DETECT_INSTALLATION $ProductCode $Registry_Key $File_Check $regPart
 
 	if ($Global:Err_Return -eq 0)
 	{
-		if (($Global:FileDetect -eq $false -AND $Global:KeyDetect -eq $false) -OR ($Global:Key_ToCheck_isEmpty -eq $true -AND $Global:File_ToCheck_isEmpty -eq $true)) 
+		if (($Global:FileDetect -eq $false -AND $Global:KeyDetect -eq $false -AND $Global:ProductCodeDetect -eq $false) -OR ($Global:Key_ToCheck_isEmpty -eq $true -AND $Global:File_ToCheck_isEmpty -eq $true -AND $Global:ProductCode_ToCheck_isEmpty -eq $true))
 		{
 			$Arguments = "/i `"$InstallFile`" TRANSFORMS=`"$Transform`" $InstallParameters"
 
 			LOG_WRITE "Installation:" $InstallFile
-			EventLog 1 Information "Installation:" $InstallFile "Installation de l'application."
+			WriteInEventLog 1 Information "Installation:" $InstallFile "Install application."
 
-			Start-Process -FilePath 'msiexec.exe' -ArgumentList "$Arguments" -Wait -Passthru            #Lancement de l'executable
-			Start-Sleep -s 60                                                                           #Attente dernieres actions
+			Start-Process -FilePath 'msiexec.exe' -ArgumentList "$Arguments" -Wait -Passthru
+			Start-Sleep -s 60
 
-			LOG_WRITE "Delais requis:" $Tempo " secondes"
+			LOG_WRITE "Wait required:" $Tempo " seconds"
+			Start-Sleep -s $Tempo
 
-			Start-Sleep -s $Tempo                                                                       #Attente supplementaire requis
+			DETECT_INSTALLATION $ProductCode $Registry_Key $File_Check $regPart
 
-			DETECT_INSTALLATION $Registry_Key $File_Check $regPart
-
-			if (($Global:FileDetect -eq $true) -OR ($Global:KeyDetect -eq $true) -OR ($Global:Key_ToCheck_isEmpty -eq $true -AND $Global:File_ToCheck_isEmpty -eq $true)) 
+			if (($Global:FileDetect -eq $true) -OR ($Global:KeyDetect -eq $true) -OR ($Global:ProductCodeDetect -eq $true) -OR ($Global:Key_ToCheck_isEmpty -eq $true -AND $Global:File_ToCheck_isEmpty -eq $true -AND $Global:ProductCode_ToCheck_isEmpty -eq $true))
 			{
-				LOG_WRITE "Installation Réussie:" $InstallFile
-				EventLog 1 Information "Installation:" $InstallFile "Installation de l'application réussie."
+				LOG_WRITE "Installation Success:" $InstallFile
+				WriteInEventLog 1 Information "Installation:" $InstallFile "Installation Success."
 			}
 			else 
 			{
 				$Global:Err_Return = 1
-				LOG_WRITE "Echec de l'installation:" $InstallFile
-				EventLog 3 Error "Echec de l'installation:" $InstallFile "Installation de l'application échoué."
+				LOG_WRITE "Installation Failed:" $InstallFile
+				WriteInEventLog 3 Error "Installation Failed:" $InstallFile "Oh no ! I don't have a brain..."
 			}
 		}
 		else 
 		{
-			LOG_WRITE "Application déjà installée:" $InstallFile
-			EventLog 1 Information "Application déjà installée:" $InstallFile "L'application est déjà présente."
+			LOG_WRITE "Application is already installed:" $InstallFile
+			WriteInEventLog 1 Information "Application is already installed:" $InstallFile "Application is already installed. I go to bed."
 		}
 	}	
 }
 
 
-Function EXECUTE_PATCH_MSI($InstallFile, $InstallParameters, $Registry_Key, $File_Check, $Tempo, $regPart) 
+# Install MSI patch (MSP)
+Function EXECUTE_PATCH_MSI($InstallFile, $InstallParameters, $ProductCode, $Registry_Key, $File_Check, $Tempo, $regPart) 
 {
-	# Verification présence ou non + Installation si besoin
-	DETECT_INSTALLATION $Registry_Key $File_Check $regPart
+	DETECT_INSTALLATION $ProductCode $Registry_Key $File_Check $regPart
 
 	if ($Global:Err_Return -eq 0) 
 	{
-		if (($Global:FileDetect -eq $false -AND $Global:KeyDetect -eq $false) -OR ($Global:Key_ToCheck_isEmpty -eq $true -AND $Global:File_ToCheck_isEmpty -eq $true)) 
+		if (($Global:FileDetect -eq $false -AND $Global:KeyDetect -eq $false -AND $Global:ProductCodeDetect -eq $false) -OR ($Global:Key_ToCheck_isEmpty -eq $true -AND $Global:File_ToCheck_isEmpty -eq $true -AND $Global:ProductCode_ToCheck_isEmpty -eq $true))
 		{
 			$Arguments = "/p `"$InstallFile`" $InstallParameters"
 
-			LOG_WRITE "Installation du patch:" $InstallFile
-			EventLog 1 Information "Installation:" $InstallFile "Installation du patch."
+			LOG_WRITE "Patch installation:" $InstallFile
+			WriteInEventLog 1 Information "Patch installation:" $InstallFile "Patch installation."
 			
-			Start-Process -FilePath 'msiexec.exe' -ArgumentList "$Arguments" -Wait -Passthru            #Lancement de l'executable
-			Start-Sleep -s 60                                                                           #Attente dernieres actions
+			Start-Process -FilePath 'msiexec.exe' -ArgumentList "$Arguments" -Wait -Passthru
+			Start-Sleep -s 60
 
-			LOG_WRITE "Delais requis:" $Tempo " secondes"
-
-			Start-Sleep -s $Tempo                                                                       #Attente supplementaire requis
+			LOG_WRITE "Wait required:" $Tempo " seconds"
+			Start-Sleep -s $Tempo
 
 			DETECT_INSTALLATION $Registry_Key $File_Check $regPart
 
-			if (($Global:FileDetect -eq $true) -OR ($Global:KeyDetect -eq $true) -OR ($Global:Key_ToCheck_isEmpty -eq $true -AND $Global:File_ToCheck_isEmpty -eq $true)) 
+			if (($Global:FileDetect -eq $true) -OR ($Global:KeyDetect -eq $true) -OR ($Global:ProductCodeDetect -eq $true) -OR ($Global:Key_ToCheck_isEmpty -eq $true -AND $Global:File_ToCheck_isEmpty -eq $true -AND $Global:ProductCode_ToCheck_isEmpty -eq $true))
 			{
-				LOG_WRITE "Installation Réussie:" $InstallFile
-				EventLog 1 Information "Installation:" $InstallFile "Installation du patch réussie."
+				LOG_WRITE "Installation Success:" $InstallFile
+				WriteInEventLog 1 Information "Installation Success:" $InstallFile "Patch installation success. I'm the best !"
 			}
 			else 
 			{
 				$Global:Err_Return = 1
-				LOG_WRITE "Echec de l'installation:" $InstallFile
-				EventLog 3 Error "Echec de l'installation:" $InstallFile "Installation du patch échouée."
+				LOG_WRITE "Installation Failed:" $InstallFile
+				WriteInEventLog 3 Error "Installation Failed:" $InstallFile "Patch installation failed. Please, don't tell it to mom !"
 			}
 		}
-		else 
+		else
 		{
-			LOG_WRITE "Patch déjà installé:" $InstallFile
-			EventLog 1 Information "Patch déjà installé:" $InstallFile "Le patch est déjà présent."
+			LOG_WRITE "Patch already installed:" $InstallFile
+			WriteInEventLog 1 Information "Patch already installed:" $InstallFile "Patch already installed. I like to do nothing."
 		}
-	}	
+	}
 }
 
 
+# Install EXE file
 Function EXECUTE_INSTALLATION_EXE($InstallFile, $InstallParameters, $Registry_Key, $File_Check, $Tempo, $regPart) 
 {
-	# Verification présence ou non + Installation si besoin
-	DETECT_INSTALLATION $Registry_Key $File_Check $regPart
+	DETECT_INSTALLATION "" $Registry_Key $File_Check $regPart
 	
 	if ($Global:Err_Return -eq 0) 
 	{
-		if (($Global:FileDetect -eq $false -AND $Global:KeyDetect -eq $false) -OR ($Global:Key_ToCheck_isEmpty -eq $true -AND $Global:File_ToCheck_isEmpty -eq $true)) 
+		if (($Global:FileDetect -eq $false -AND $Global:KeyDetect -eq $false) -OR ($Global:Key_ToCheck_isEmpty -eq $true -AND $Global:File_ToCheck_isEmpty -eq $true))
 		{
-			LOG_WRITE "Installation:" $InstallFile
-			EventLog 1 Information "Installation:" $InstallFile "Installation de l'application."
+			LOG_WRITE "Application installation:" $InstallFile
+			WriteInEventLog 1 Information "Application installation:" $InstallFile "Application installation."
 
-			Start-Process -FilePath `"$InstallFile`" -ArgumentList "$InstallParameters" -Wait -Passthru     #Lancement de l'executable
-			Start-Sleep -s 60                                                                               #Attente dernieres actions
+			Start-Process -FilePath `"$InstallFile`" -ArgumentList "$InstallParameters" -Wait -Passthru
+			Start-Sleep -s 60
 			
-			LOG_WRITE "Delais requis:" $Tempo " secondes"
+			LOG_WRITE "Wait required:" $Tempo " seconds"
+			Start-Sleep -s $Tempo
 
-			Start-Sleep -s $Tempo                                                                           #Attente supplementaire requis
-
-			DETECT_INSTALLATION $Registry_Key $File_Check $regPart
+			DETECT_INSTALLATION "" $Registry_Key $File_Check $regPart
 
 			if (($Global:FileDetect -eq $true) -OR ($Global:KeyDetect -eq $true) -OR ($Global:Key_ToCheck_isEmpty -eq $true -AND $Global:File_ToCheck_isEmpty -eq $true)) 
 			{
-				LOG_WRITE "Installation réussie:" $InstallFile
-				EventLog 1 Information "Installation:" $InstallFile "Installation de l'application réussie."
+				LOG_WRITE "Installation Success:" $InstallFile
+				WriteInEventLog 1 Information "Installation Success:" $InstallFile "Application installed. Oh yeah baby !"
 			}
 			else 
 			{
 				$Global:Err_Return = 1
-				LOG_WRITE "Echec de l'installation:" $InstallFile
-				EventLog 3 Error "Echec de l'installation:" $InstallFile "Installation de l'application échoué."
+				LOG_WRITE "Installation failed:" $InstallFile
+				WriteInEventLog 3 Error "Installation failed:" $InstallFile "Application not installed. I need a break..."
 			}
 		}
 		else 
 		{
-			LOG_WRITE "Application déjà installée:" $InstallFile 
-			EventLog 1 Information "Application déjà installée:" $InstallFile "L'application est déjà présente."
+			LOG_WRITE "Application already installed:" $InstallFile 
+			WriteInEventLog 1 Information "Application already installed:" $InstallFile "Application already installed. This is a good computer."
 		}
-	}	
+	}
 }
 
 
+# Install APPX or APPBUNDLE file (MS Store)
 Function EXECUTE_INSTALLATION_APPX($InstallExec, $InstallName, $Version)
 {
 	$InstallFile = $PathExecute + "\" + $InstallExec
@@ -449,34 +475,34 @@ Function EXECUTE_INSTALLATION_APPX($InstallExec, $InstallName, $Version)
 
 		If (($Global:AppxName -eq $InstallName) -AND ($Global:AppxVersion -eq $Version))
 		{
-			LOG_WRITE "Installation réussie:" $Global:AppxName
-			EventLog 1 Information "Installation:" $Global:AppxName "Installation de l'application réussie."
+			LOG_WRITE "Installation Success:" $Global:AppxName
+			WriteInEventLog 1 Information "Installation Success:" $Global:AppxName "Installation Success. Time to take a break."
 		}
 		else 
 		{
 			$Global:Err_Return = 1
-			LOG_WRITE "Echec de l'installation:" $InstallFile
-			EventLog 3 Error "Echec de l'installation:" $InstallFile "Installation de l'application échoué."
+			LOG_WRITE "Installation failed:" $InstallFile
+			WriteInEventLog 3 Error "Installation failed:" $InstallFile "Installation failed. It's not my fault, don't kick me please..."
 		} 
 	}
 	elseif ($Global:AppxVersion -eq $Version) 
 	{
-		LOG_WRITE "Application déjà installée:" $Global:AppxName
-		EventLog 1 Information "Application déjà installée:" $Global:AppxName "L'application est déjà présente."
+		LOG_WRITE "Application already installed:" $Global:AppxName
+		WriteInEventLog 1 Information "Application already installed:" $Global:AppxName "Application already installed..."
 	}
 	else 
 	{
 		Remove-AppxPackage -Package $Global:AppxFullName -ErrorAction 'SilentlyContinue'
 
 		LOG_WRITE "Migration:" $Global:AppxName
-		EventLog 1 Information "Migration:" $Global:AppxName "Migration de l'application."
+		WriteInEventLog 1 Information "Migration:" $Global:AppxName "Application migration in progress. I don't like old stuff."
 
 		DETECT_APPX $InstallName
 
 		If ([string]::IsNullOrEmpty($Global:scanAppx))
 		{
-			LOG_WRITE "Migration réussie:" $Global:AppxName
-			EventLog 1 Information "Migration:" $Global:AppxName "Migration de l'application réussie."
+			LOG_WRITE "Migration success:" $Global:AppxName
+			WriteInEventLog 1 Information "Migration success:" $Global:AppxName "Migration success. :)"
 
 			If ($Global:Err_Return -eq 0)
 			{
@@ -487,198 +513,188 @@ Function EXECUTE_INSTALLATION_APPX($InstallExec, $InstallName, $Version)
 				If (([String]::IsNullOrEmpty($Global:scanAppx)) -OR ($Global:AppxVersion -ne $Version))
 				{
 					$Global:Err_Return = 1
-					LOG_WRITE "Echec de l'installation:" $InstallFile
-					EventLog 3 Error "Echec de l'installation:" $InstallFile "Installation de l'application échoué."
+					LOG_WRITE "Installation failed:" $InstallFile
+					WriteInEventLog 3 Error "Installation failed:" $InstallFile "Installation failed. Ooops"
 				}
 				else 
 				{
-					LOG_WRITE "Installation réussie:" $Global:AppxName
-					EventLog 1 Information "Installation:" $Global:AppxName "Installation de l'application réussie."
+					LOG_WRITE "Installation success:" $Global:AppxName
+					WriteInEventLog 1 Information "Installation success:" $Global:AppxName "Installation success. Yeah !"
 				}
 			}
 		}
 		else 
 		{
 			$Global:Err_Return = 1
-			LOG_WRITE "Echec de la migration:" $InstallFile
-			EventLog 3 Error "Echec de la migration:" $InstallFile "Migration de l'application échoué."
+			LOG_WRITE "Migration failed:" $InstallFile
+			WriteInEventLog 3 Error "Migration failed:" $InstallFile "Migration failed. I need administrator's help..."
 		}
 	}
-
 }
 
+
+# Install CAB file
 Function EXECUTE_INSTALLATION_CAB($InstallExec)
 {
 	LOG_WRITE "Installation:" $InstallExec
-	EventLog 1 Information "Installation:" $InstallExec "Installation de l'application."
+	WriteInEventLog 1 Information "Installation:" $InstallExec "Application installation."
 
 	$path = $PathExecute + "\" + $InstallExec
 	dism /online /add-package /packagepath:"$path" /NoRestart /Quiet
 	Start-Sleep -s 45
+
+	LOG_WRITE "Installation done:" $InstallExec
+	WriteInEventLog 1 Information "Installation completed:" $InstallExec "Must be tested."
 }
 
 
+# Install MSU file (KB, Windows update)
 Function EXECUTE_INSTALLATION_MSU($InstallExec)
 {
 	LOG_WRITE "Installation:" $InstallExec
-	EventLog 1 Information "Installation:" $InstallExec "Installation de la mise a jour Windows."
+	WriteInEventLog 1 Information "Installation:" $InstallExec "Install Windows update file."
 
 	$path = $PathExecute + "\" + $InstallExec
 	wusa $path /quiet /NoRestart
-
 	Start-Sleep -s 45
+
+	LOG_WRITE "Installation done:" $InstallExec
+	WriteInEventLog 1 Information "Installation completed:" $InstallExec "Windows is (maybe) up to date."
 }
 
 
-Function EXECUTE_MIGRATION_MSI($Product_Code, $Parameters, $Registry_Key, $File_Check, $Tempo, $regPart)
+# MSI Migration
+Function EXECUTE_MIGRATION_MSI($Product_Code, $Parameters, $ProductCode, $Registry_Key, $File_Check, $Tempo, $regPart)
 {
-	# Verification présence V N-1, N-2 etc... ou non + désinstallation si besoin
-	DETECT_INSTALLATION $Registry_Key $File_Check $regPart
+	DETECT_INSTALLATION $ProductCode $Registry_Key $File_Check $regPart
 
 	if ($Global:Err_Return -eq 0) 
 	{
-		if (($Global:FileDetect -eq $true -OR $Global:KeyDetect -eq $true) -OR ($Global:Key_ToCheck_isEmpty -eq $true -AND $Global:File_ToCheck_isEmpty -eq $true)) 
+		if (($Global:FileDetect -eq $true -OR $Global:KeyDetect -eq $true -OR $Global:ProductCodeDetect -eq $true) -OR ($Global:Key_ToCheck_isEmpty -eq $true -AND $Global:File_ToCheck_isEmpty -eq $true -AND $Global:ProductCode_ToCheck_isEmpty -eq $true)) 
 		{
-			LOG_WRITE "Migration:" $Product_Code
-			EventLog 1 Information "Migration:" $Product_Code "Migration de l'application."
+			LOG_WRITE "Application migration:" $Product_Code
+			WriteInEventLog 1 Information "Application migration:" $Product_Code "Application migration. Va de retro Satanas !"
 
 			$Arguments = "/X $Product_Code $Parameters"
 
-			Start-Process -FilePath 'msiexec.exe' -ArgumentList "$Arguments" -Wait -Passthru                #Lancement de l'executable
-			Start-Sleep -s 60                                                                               #Attente dernieres actions
+			Start-Process -FilePath 'msiexec.exe' -ArgumentList "$Arguments" -Wait -Passthru
+			Start-Sleep -s 60
 
-			LOG_WRITE "Delais requis:" $Tempo " secondes"
+			LOG_WRITE "Wait required:" $Tempo " seconds"
+			Start-Sleep -s $Tempo
 
-			Start-Sleep -s $Tempo                                                                           #Attente supplementaire requis
+			DETECT_INSTALLATION $ProductCode $Registry_Key $File_Check $regPart
 
-			DETECT_INSTALLATION $Registry_Key $File_Check $regPart
-
-			if (($Global:FileDetect -eq $false -AND $Global:KeyDetect -eq $false) -OR ($Global:Key_ToCheck_isEmpty -eq $true -AND $Global:File_ToCheck_isEmpty -eq $true)) 
+			if (($Global:FileDetect -eq $false -AND $Global:KeyDetect -eq $false -AND $Global:ProductCodeDetect -eq $false) -OR ($Global:Key_ToCheck_isEmpty -eq $true -AND $Global:File_ToCheck_isEmpty -eq $true -AND $Global:ProductCode_ToCheck_isEmpty -eq $true)) 
 			{
-				LOG_WRITE "Migration réussie:" $Product_Code
-				EventLog 1 Information "Migration réussie:" $Product_Code "Migration de l'application réussie."
+				LOG_WRITE "Migration success:" $Product_Code
+				WriteInEventLog 1 Information "Migration success:" $Product_Code "Migration success. The devil is gone !"
 			}
 			else 
 			{
 				$Global:Err_Return = 1
-				LOG_WRITE "Echec de la migration:" $Product_Code
-				EventLog 3 Error "Echec de la migration:" $Product_Code "Migration de l'application échoué."
+				LOG_WRITE "Migration failed:" $Product_Code
+				WriteInEventLog 3 Error "Migration failed:" $Product_Code "Migration failed. Run ! He is coming for you !"
 			}
 		}
 		else 
 		{
-			LOG_WRITE "Application non installée:" $Product_Code
-			EventLog 1 Information "Migration:" $Product_Code "L'application n'est pas installée."
+			LOG_WRITE "Application not installed:" $Product_Code
+			WriteInEventLog 1 Information "Migration:" $Product_Code "Application not installed. This is a good day of hard work."
 		}
 	}
 }
 
 
+# EXE Migration
 Function EXECUTE_MIGRATION_EXE($RemoveExe, $Parameters, $Registry_Key, $File_Check, $Tempo, $regPart)
 {
-	# Verification présence V N-1, N-2 etc... ou non + désinstallation si besoin
-	DETECT_INSTALLATION $Registry_Key $File_Check $regPart
+	DETECT_INSTALLATION "" $Registry_Key $File_Check $regPart
 
 	if ($Global:Err_Return -eq 0) 
 	{
 		if (($Global:FileDetect -eq $true -OR $Global:KeyDetect -eq $true) -OR ($Global:Key_ToCheck_isEmpty -eq $true -AND $Global:File_ToCheck_isEmpty -eq $true))
 		{
-			LOG_WRITE "Migration:" $RemoveExe
-			EventLog 1 Information "Migration:" $RemoveExe "Migration de l'application."
+			LOG_WRITE "Application migration:" $RemoveExe
+			WriteInEventLog 1 Information "Application migration:" $RemoveExe "Application migration. I have nothing to tell you."
 
-			Start-Process -FilePath `"$RemoveExe`" -ArgumentList "$Parameters" -Wait -Passthru              #Lancement de l'executable
-			Start-Sleep -s 60                                                                               #Attente dernieres actions
+			Start-Process -FilePath `"$RemoveExe`" -ArgumentList "$Parameters" -Wait -Passthru
+			Start-Sleep -s 60
 
-			LOG_WRITE "Delais requis:" $Tempo " secondes"
+			LOG_WRITE "Wait required:" $Tempo " seconds"
+			Start-Sleep -s $Tempo
 
-			Start-Sleep -s $Tempo                                                                           #Attente supplementaire requis
-
-			DETECT_INSTALLATION $Registry_Key $File_Check $regPart
+			DETECT_INSTALLATION "" $Registry_Key $File_Check $regPart
 
 			if (($Global:FileDetect -eq $false -AND $Global:KeyDetect -eq $false) -OR ($Global:Key_ToCheck_isEmpty -eq $true -AND $Global:File_ToCheck_isEmpty -eq $true)) 
 			{
-				LOG_WRITE "Migration réussie:" $RemoveExe
-				EventLog 1 Information "Migration réussie:" $RemoveExe "Migration de l'application réussie."
+				LOG_WRITE "Migration success:" $RemoveExe
+				WriteInEventLog 1 Information "Migration success:" $RemoveExe "Migration success. Thanks to me."
 			}
 			else 
 			{
 				$Global:Err_Return = 1
-				LOG_WRITE "Echec de la migration:" $RemoveExe
-				EventLog 3 Error "Echec de la migration:" $RemoveExe "Migration de l'application échoué."
+				LOG_WRITE "Migration failed:" $RemoveExe
+				WriteInEventLog 3 Error "Migration failed:" $RemoveExe "Migration failed. This is PRX fault !"
 			}
 		}
 		else 
 		{
-			LOG_WRITE "Application non installée:" $RemoveExe
-			EventLog 1 Information "Migration:" $RemoveExe "L'application n'est pas installée."
+			LOG_WRITE "Application not installed:" $RemoveExe
+			WriteInEventLog 1 Information "Application not installed:" $RemoveExe "Application not installed. I love Coca-Cola."
 		}
-	}	
+	}
 }
 
 
+# Ask SCCM reboot
 Function REBOOT_DEMAND($RCode)
 {
-	# Retourne code 3010 si besoin d'un reboot
-	# Code interprété par SCCM
-
 	If ($RCode -eq 3010) 
 	{
-		LOG_WRITE "Reboot requis:" "OUI"
-		EventLog 2 Warning "Reboot:" "Requis" "L'ordinateur doit redémarrer pour finaliser l'installation du package."
+		LOG_WRITE "Reboot required:" "YES"
+		WriteInEventLog 2 Warning "Reboot:" "Required" "Computer must be rebooted."
 	}  
 	else 
 	{   
-		LOG_WRITE "Reboot requis:" "NON"
-		EventLog 1 Information "Reboot:" "Non requis" "L'ordinateur n'a pas besoin de redémarrer pour finaliser l'installation du package."
+		LOG_WRITE "Reboot required:" "NO"
+		WriteInEventLog 1 Information "Reboot:" "Not required" "Computer not need to be rebooted."
 	}
 	[System.Environment]::Exit($RCode)
 }
 
 
-######################################## Déclaration des variables d'installation ########################################
+######################################## BEGIN installation variables declaration ########################################
 
 $Installtype = ""               # USER for user installation or SYSTEM for a system installation
-$Application_Name = ""          # Nom de l'application
-$Application_Version = ""       # Version de l'application Vxx.xx.xx
-$Editor = ""                    # Editeur
+$Application_Name = ""          # Application name
+$Application_Version = ""       # Application version
+$Editor = ""                    # Editor
 $Install_Path = ""              # Install folder of the application
-$Technologie = ""               # MSI, EXE, APPX, CAB or MSU
+$Technologie = ""               # MSI, EXE, APPX, CAB, MSU or SCRIPT
 $Arch =                         # 32 or 64
 $Kill_Process = @()             # Process to kil. If neccessary. Ex: $Kill_Process = @("chrome","iexplore","firefox")
-$Reboot_Code = 0                # 3010 for reboot
+$Reboot_Code = 0                # 3010 for reboot - 0 by default
 
-######################################## Fin Déclaration des variables d'installation ########################################
+######################################## END installation variables declaration ########################################
 
 
 ######################################## Begin Bloc ###############################
 $Global:SourceName = "SCCM_" + $Application_Name + "_" + $Application_Version
-If ([System.Diagnostics.EventLog]::SourceExists("CLS_Script") -Match $false -And (New-Object Security.Principal.WindowsPrincipal $user).IsInRole([Security.Principal.WindowsBuiltinRole]::Administrator)) 
-{
-	New-EventLog -LogName "CLS_Script" -Source $Global:SourceName -ErrorAction 'SilentlyContinue'
-}
-If ([System.Diagnostics.EventLog]::SourceExists("CLS_Script") -Match $true -And (New-Object Security.Principal.WindowsPrincipal $user).IsInRole([Security.Principal.WindowsBuiltinRole]::Administrator)) 
-{
-	Try 
-	{
-		New-EventLog -LogName "CLS_Script" -Source $Global:SourceName -ErrorAction 'SilentlyContinue'
-	}
-	Catch 
-	{
 
-	}
-}
+New-EventLog -LogName "CLS_Script" -Source $Global:SourceName -ErrorAction 'SilentlyContinue'
 
 $RepTemp = (Test-Path -path 'C:\temp')
 $RepLog = (Test-Path -path 'C:\temp\sccm_logs')
 
 If ($RepTemp -eq $false) 
 {
-		New-Item -name 'temp' -path 'C:\' -type 'directory' -ErrorAction 'SilentlyContinue'
+	New-Item -name 'temp' -path 'C:\' -type 'directory' -ErrorAction 'SilentlyContinue'
 }
 
 If ($RepLog -eq $false)
 {
-		New-Item -name 'sccm_logs' -path 'C:\temp' -type 'directory' -ErrorAction 'SilentlyContinue'
+	New-Item -name 'sccm_logs' -path 'C:\temp' -type 'directory' -ErrorAction 'SilentlyContinue'
 }
 
 $LogPath = "C:\temp\sccm_logs\I_" + $Application_Name + " " + $Application_Version + ".LOG"
@@ -695,35 +711,30 @@ KILL_PROCESS $Kill_Process
 
 ######################################## END Begin Bloc ##############################
 
-######################################## Migration ########################################
+######################################## BEGIN Migration ########################################
 
-
-		# Bloc de désinstallation/Migration
-		#EXECUTE_MIGRATION "EXECUTABLE" "ARGUMENTS" "REGISTRY KEYS" "FILE CHECK" "TEMPO"
-#EXECUTE_MIGRATION_EXE "C:\Program Files\Mozilla Firefox\uninstall\helper.exe" "/S" "" "C:\Program Files\Mozilla Firefox\firefox.exe=57.0.2" 0 32
-#EXECUTE_MIGRATION_MSI "{23170F69-40C1-2702-1801-000001000000}" "/qn /l* `"C:\temp\sccm_logs\Remove_7ZIP V18.01.log`"" "{23170F69-40C1-2702-1801-000001000000}" "" 0 64
+# Bloc for Uninstall/Migration
+#EXECUTE_MIGRATION_EXE "C:\Program Files\Mozilla Firefox\uninstall\helper.exe" "/S" "REG KEY" "C:\Program Files\Mozilla Firefox\firefox.exe=57.0.2" 0 32
+#EXECUTE_MIGRATION_MSI "PRODUCT CODE or MSI FILE" "/qn /l* `"C:\temp\sccm_logs\Remove_7ZIP V18.01.log`"" "PRODUCT CODE" "REG KEY" "FILE" 0 64
 
 
 If ($Global:Err_Return -eq 0)
 {
 	### Execute other actions: Suppress file, shortcuts...
-	CLS_REMOVEREGSIGN "APP NAME" "APP VERSION" $Arch
-
+	#CLS_REMOVEREGSIGN "APP NAME" "APP VERSION" $Arch
 }
 
-######################################## Fin Migration ########################################
+######################################## END Migration ########################################
 
 
-######################################## Installation ########################################
+######################################## BEGIN Installation ########################################
 
-		#Bloc d'installation
+### EXECUTE_INSTALLATION_EXE "EXECUTABLE" "ARGUMENTS" "REGISTRY KEYS" "FILE CHECK" TEMPO ARCH
+### EXECUTE_INSTALLATION_MSI "EXECUTABLE" "TRANSFORM" "ARGUMENTS" "PRODUCT CODE" "REGISTRY KEY" "FILE CHECK" TEMPO ARCH
+### EXECUTE_PATCH_MSI "EXECUTABLE" "TRANSFORM" "ARGUMENTS" "PRODUCT CODE" "REGISTRY KEY" "FILE CHECK" TEMPO ARCH
+### EXECUTE_INSTALLATION_APPX "EXECUTABLE" "PKG Name" "PKG Version"
 
-		### EXECUTE_INSTALLATION_EXE "EXECUTABLE" "ARGUMENTS" "REGISTRY KEYS" "FILE CHECK" "TEMPO" "ARCH"
-		### EXECUTE_INSTALLATION_MSI "EXECUTABLE" "TRANSFORM" "ARGUMENTS" "REGISTRY KEYS" "FILE CHECK" "TEMPO" "ARCH"
-		### EXECUTE_PATCH_MSI "EXECUTABLE" "ARGUMENTS" "REGISTRY KEYS" "FILE CHECK" "TEMPO" "ARCH"
-		### EXECUTE_INSTALLATION_APPX "EXECUTABLE" "PKG Name" "PKG Version"
-
-#EXECUTE_INSTALLATION_MSI "7ZIP V18.01.msi" "" "/qn /l* `"C:\temp\sccm_logs\Install_7ZIP V18.01.log`"" "{23170F69-40C1-2702-1801-000001000000}" "" 0 64
+#EXECUTE_INSTALLATION_MSI "7ZIP V18.01.msi" "" "/qn /l* `"C:\temp\sccm_logs\Install_7ZIP V18.01.log`"" "{23170F69-40C1-2702-1801-000001000000}" "" "" 0 64
 #EXECUTE_INSTALLATION_EXE "Firefox V57.0.02.exe" " /S" "" "C:\Program Files\Mozilla Firefox\firefox.exe=57.0.2" 0 32        
 #EXECUTE_INSTALLATION_APPX "CheckPointVPN_1.0.14.0_x64.Appx" "B4D42709.CheckPointVPN" 1.0.14.0
 #EXECUTE_INSTALLATION_CAB "moncab.CAB"
@@ -736,8 +747,8 @@ If ($Global:Err_Return -eq 0)
 	CLS_SETREGSIGN $Application_Name $Application_Version $Editor $Install_Path $Technologie $Arch
 }
 
-######################################## Fin Installation #####################################
+######################################## END Installation #####################################
 
-######################################## Debut Finalisation ########################################
+######################################## BEGIN Final ########################################
 REBOOT_DEMAND $Reboot_Code
-######################################## Fin Finalisation ########################################
+######################################## END Final ########################################
