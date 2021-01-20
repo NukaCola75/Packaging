@@ -57,7 +57,7 @@ function WriteInEventLog($EventCat, $ErrorType, $Step, $Result, $ErrorText)
 	If ($Installtype -eq "SYSTEM")
 	{
 		$EventMessage = "Step: $Step.`n Action: $Result `r Error Type: $ErrorText"
-		Write-EventLog –LogName "CLS_Script" –Source $Global:SourceName –EntryType $ErrorType –EventID $EventCat –Message $EventMessage
+		Write-EventLog â€“LogName "CLS_Script" â€“Source $Global:SourceName â€“EntryType $ErrorType â€“EventID $EventCat â€“Message $EventMessage
 	}
 }
 
@@ -396,7 +396,7 @@ Function EXECUTE_PATCH_MSI($InstallFile, $InstallParameters, $ProductCode, $Regi
 			LOG_WRITE "Wait required:" $Tempo " seconds"
 			Start-Sleep -s $Tempo
 
-			DETECT_INSTALLATION $Registry_Key $File_Check $regPart
+			DETECT_INSTALLATION $ProductCode $Registry_Key $File_Check $regPart
 
 			if (($Global:FileDetect -eq $true) -OR ($Global:KeyDetect -eq $true) -OR ($Global:ProductCodeDetect -eq $true) -OR ($Global:Key_ToCheck_isEmpty -eq $true -AND $Global:File_ToCheck_isEmpty -eq $true -AND $Global:ProductCode_ToCheck_isEmpty -eq $true))
 			{
@@ -731,7 +731,7 @@ If ($Global:Err_Return -eq 0)
 
 ### EXECUTE_INSTALLATION_EXE "EXECUTABLE" "ARGUMENTS" "REGISTRY KEYS" "FILE CHECK" TEMPO ARCH
 ### EXECUTE_INSTALLATION_MSI "EXECUTABLE" "TRANSFORM" "ARGUMENTS" "PRODUCT CODE" "REGISTRY KEY" "FILE CHECK" TEMPO ARCH
-### EXECUTE_PATCH_MSI "EXECUTABLE" "TRANSFORM" "ARGUMENTS" "PRODUCT CODE" "REGISTRY KEY" "FILE CHECK" TEMPO ARCH
+### EXECUTE_PATCH_MSI "EXECUTABLE" "ARGUMENTS" "PRODUCT CODE" "REGISTRY KEY" "FILE CHECK" TEMPO ARCH
 ### EXECUTE_INSTALLATION_APPX "EXECUTABLE" "PKG Name" "PKG Version"
 
 #EXECUTE_INSTALLATION_MSI "7ZIP V18.01.msi" "" "/qn /l* `"C:\temp\sccm_logs\Install_7ZIP V18.01.log`"" "{23170F69-40C1-2702-1801-000001000000}" "" "" 0 64
