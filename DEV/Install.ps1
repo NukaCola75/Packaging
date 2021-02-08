@@ -1,9 +1,9 @@
 ############################################################################################
-######################################## 27/02/2019 ########################################
-########################################   V03.00   ########################################
+######################################## 08/02/2021 ########################################
+########################################   V03.50   ########################################
 #################################### Installation Script ###################################
 ############################################################################################
-# .Net methods - Masque la fenetre powershell
+# .Net methods - For hiding powershell console host
 #Add-Type -Name Window -Namespace Console -MemberDefinition '
 #[DllImport("Kernel32.dll")]
 #public static extern IntPtr GetConsoleWindow();
@@ -22,7 +22,8 @@
 ######################################## BEGIN GLOBAL variables declaration ########################################
 
 
-$ScriptVersion = "V03.00 - 27/02/2019"
+$ScriptVersion = "V03.50 - 02/08/2021"							# English date format
+$CompanyHive = ""												# Provide your company name here
 $OSVersion = [Environment]::OSVersion                           # Detect Windows version
 $OSLang = Get-Culture                                           # Detect Windows language
 $InstallDate = Get-Date                                         # Get current date
@@ -57,7 +58,7 @@ function WriteInEventLog($EventCat, $ErrorType, $Step, $Result, $ErrorText)
 	If ($Installtype -eq "SYSTEM")
 	{
 		$EventMessage = "Step: $Step.`n Action: $Result `r Error Type: $ErrorText"
-		Write-EventLog –LogName "CLS_Script" –Source $Global:SourceName –EntryType $ErrorType –EventID $EventCat –Message $EventMessage
+		Write-EventLog -LogName $CompanyHive"_Script" -Source $Global:SourceName -EntryType $ErrorType -EventID $EventCat -Message $EventMessage
 	}
 }
 
@@ -95,7 +96,7 @@ Function KILL_PROCESS($Process_ToKill)
 
 
 # Sign the application for inventory
-Function CLS_SETREGSIGN($App_Name, $App_Version, $App_Editor, $Install_Dir, $Techno, $Archi)
+Function INVENTORY_SETREGSIGN($App_Name, $App_Version, $App_Editor, $Install_Dir, $Techno, $Archi)
 {
 	$Reg_Name = $App_Name + " " + $App_Version
 	If ($Archi -eq 32)
@@ -123,16 +124,16 @@ Function CLS_SETREGSIGN($App_Name, $App_Version, $App_Editor, $Install_Dir, $Tec
 
 	Try
 	{
-		new-item -path $path\CLS -ErrorAction 'SilentlyContinue'
-		new-item -path $path\CLS\INVENTORY -ErrorAction 'SilentlyContinue'
-		new-item -path $path\CLS\INVENTORY\Packages -ErrorAction 'SilentlyContinue'
-		new-item -path $path\CLS\INVENTORY\Packages\$Reg_Name -ErrorAction 'SilentlyContinue'
+		# new-item -path $path\$CompanyHive -ErrorAction 'SilentlyContinue'
+		# new-item -path $path\$CompanyHive\INVENTORY -ErrorAction 'SilentlyContinue'
+		# new-item -path $path\$CompanyHive\INVENTORY\Packages -ErrorAction 'SilentlyContinue'
+		new-item -path $path\$CompanyHive\INVENTORY\Packages\$Reg_Name -Force -ErrorAction 'SilentlyContinue'
 
-		new-itemproperty -path $path\CLS\INVENTORY\Packages\$Reg_Name -name "InstallDate" -value $InstallDate -ErrorAction 'SilentlyContinue'
-		new-itemproperty -path $path\CLS\INVENTORY\Packages\$Reg_Name -name "InstallLocation" -value $Install_Dir -ErrorAction 'SilentlyContinue'
-		new-itemproperty -path $path\CLS\INVENTORY\Packages\$Reg_Name -name "Name" -value $App_Name -ErrorAction 'SilentlyContinue'
-		new-itemproperty -path $path\CLS\INVENTORY\Packages\$Reg_Name -name "Publisher" -value $App_Editor -ErrorAction 'SilentlyContinue'
-		new-itemproperty -path $path\CLS\INVENTORY\Packages\$Reg_Name -name "Version" -value $App_Version -ErrorAction 'SilentlyContinue'
+		new-itemproperty -path $path\$CompanyHive\INVENTORY\Packages\$Reg_Name -name "InstallDate" -value $InstallDate -ErrorAction 'SilentlyContinue'
+		new-itemproperty -path $path\$CompanyHive\INVENTORY\Packages\$Reg_Name -name "InstallLocation" -value $Install_Dir -ErrorAction 'SilentlyContinue'
+		new-itemproperty -path $path\$CompanyHive\INVENTORY\Packages\$Reg_Name -name "Name" -value $App_Name -ErrorAction 'SilentlyContinue'
+		new-itemproperty -path $path\$CompanyHive\INVENTORY\Packages\$Reg_Name -name "Publisher" -value $App_Editor -ErrorAction 'SilentlyContinue'
+		new-itemproperty -path $path\$CompanyHive\INVENTORY\Packages\$Reg_Name -name "Version" -value $App_Version -ErrorAction 'SilentlyContinue'
 
 		LOG_WRITE "Signed by registry key:" "Success"
 		WriteInEventLog 1 Information "Signed by registry key:" "Success" "Application registered."
@@ -146,7 +147,7 @@ Function CLS_SETREGSIGN($App_Name, $App_Version, $App_Editor, $Install_Dir, $Tec
 
 
 # Remove the application signature for inventory
-Function CLS_REMOVEREGSIGN($App_Name, $App_Version, $Archi)
+Function INVENTORY_REMOVEREGSIGN($App_Name, $App_Version, $Archi)
 {
 	$Reg_Name = $App_Name + " " + $App_Version
 	If ($Archi -eq 32)
@@ -174,9 +175,9 @@ Function CLS_REMOVEREGSIGN($App_Name, $App_Version, $Archi)
 
 	Try
 	{
-		If (Test-Path -path $path\CLS\INVENTORY\Packages\$Reg_Name)
+		If (Test-Path -path $path\$CompanyHive\INVENTORY\Packages\$Reg_Name)
 		{
-			Remove-Item $path\CLS\INVENTORY\Packages\$Reg_Name -force -ErrorAction 'SilentlyContinue'
+			Remove-Item $path\$CompanyHive\INVENTORY\Packages\$Reg_Name -Force -ErrorAction 'SilentlyContinue'
 
 			LOG_WRITE "Remove application signature:" "Success"
 			WriteInEventLog 1 Information "Remove application signature:" "Success" "Application signature removed."
@@ -322,7 +323,7 @@ Function DETECT_INSTALLATION($ProductCode_ToCheck, $Key_ToCheck, $File_ToCheck, 
 }
 
 
-# Detect APPX application (Windows Store)
+# Detect APPX application (Microsoft Store)
 Function DETECT_APPX($Name)
 {
 	$Global:scanAppx = (Get-AppxPackage -Name $Name -User $user)
@@ -396,7 +397,7 @@ Function EXECUTE_PATCH_MSI($InstallFile, $InstallParameters, $ProductCode, $Regi
 			LOG_WRITE "Wait required:" $Tempo " seconds"
 			Start-Sleep -s $Tempo
 
-			DETECT_INSTALLATION $Registry_Key $File_Check $regPart
+			DETECT_INSTALLATION $ProductCode $Registry_Key $File_Check $regPart
 
 			if (($Global:FileDetect -eq $true) -OR ($Global:KeyDetect -eq $true) -OR ($Global:ProductCodeDetect -eq $true) -OR ($Global:Key_ToCheck_isEmpty -eq $true -AND $Global:File_ToCheck_isEmpty -eq $true -AND $Global:ProductCode_ToCheck_isEmpty -eq $true))
 			{
@@ -448,7 +449,7 @@ Function EXECUTE_INSTALLATION_EXE($InstallFile, $InstallParameters, $Registry_Ke
 			{
 				$Global:Err_Return = 1
 				LOG_WRITE "Installation failed:" $InstallFile
-				WriteInEventLog 3 Error "Installation failed:" $InstallFile "Installation not installed. I need a break..."
+				WriteInEventLog 3 Error "Installation failed:" $InstallFile "Application not installed. I need a break..."
 			}
 		}
 		else 
@@ -629,13 +630,13 @@ Function EXECUTE_MIGRATION_EXE($RemoveExe, $Parameters, $Registry_Key, $File_Che
 			if (($Global:FileDetect -eq $false -AND $Global:KeyDetect -eq $false) -OR ($Global:Key_ToCheck_isEmpty -eq $true -AND $Global:File_ToCheck_isEmpty -eq $true)) 
 			{
 				LOG_WRITE "Migration success:" $RemoveExe
-				WriteInEventLog 1 Information "Migration success:" $RemoveExe "Migration success. Tanks to me."
+				WriteInEventLog 1 Information "Migration success:" $RemoveExe "Migration success. Thanks to me."
 			}
 			else 
 			{
 				$Global:Err_Return = 1
 				LOG_WRITE "Migration failed:" $RemoveExe
-				WriteInEventLog 3 Error "Migration failed:" $RemoveExe "Migration failed. This is PRX fault !"
+				WriteInEventLog 3 Error "Migration failed:" $RemoveExe "Migration failed. I'm a bad computer !"
 			}
 		}
 		else 
@@ -681,21 +682,8 @@ $Reboot_Code = 0                # 3010 for reboot - 0 by default
 
 ######################################## Begin Bloc ###############################
 $Global:SourceName = "SCCM_" + $Application_Name + "_" + $Application_Version
-If ([System.Diagnostics.EventLog]::SourceExists("CLS_Script") -Match $false -And (New-Object Security.Principal.WindowsPrincipal $user).IsInRole([Security.Principal.WindowsBuiltinRole]::Administrator)) 
-{
-	New-EventLog -LogName "CLS_Script" -Source $Global:SourceName -ErrorAction 'SilentlyContinue'
-}
-If ([System.Diagnostics.EventLog]::SourceExists("CLS_Script") -Match $true -And (New-Object Security.Principal.WindowsPrincipal $user).IsInRole([Security.Principal.WindowsBuiltinRole]::Administrator)) 
-{
-	Try 
-	{
-		New-EventLog -LogName "CLS_Script" -Source $Global:SourceName -ErrorAction 'SilentlyContinue'
-	}
-	Catch 
-	{
 
-	}
-}
+New-EventLog -LogName $CompanyHive"_Script" -Source $Global:SourceName -ErrorAction 'SilentlyContinue'
 
 $RepTemp = (Test-Path -path 'C:\temp')
 $RepLog = (Test-Path -path 'C:\temp\sccm_logs')
@@ -734,7 +722,7 @@ KILL_PROCESS $Kill_Process
 If ($Global:Err_Return -eq 0)
 {
 	### Execute other actions: Suppress file, shortcuts...
-	#CLS_REMOVEREGSIGN "APP NAME" "APP VERSION" $Arch
+	#INVENTORY_REMOVEREGSIGN "APP NAME" "APP VERSION" $Arch
 }
 
 ######################################## END Migration ########################################
@@ -744,7 +732,7 @@ If ($Global:Err_Return -eq 0)
 
 ### EXECUTE_INSTALLATION_EXE "EXECUTABLE" "ARGUMENTS" "REGISTRY KEYS" "FILE CHECK" TEMPO ARCH
 ### EXECUTE_INSTALLATION_MSI "EXECUTABLE" "TRANSFORM" "ARGUMENTS" "PRODUCT CODE" "REGISTRY KEY" "FILE CHECK" TEMPO ARCH
-### EXECUTE_PATCH_MSI "EXECUTABLE" "TRANSFORM" "ARGUMENTS" "PRODUCT CODE" "REGISTRY KEY" "FILE CHECK" TEMPO ARCH
+### EXECUTE_PATCH_MSI "EXECUTABLE" "ARGUMENTS" "PRODUCT CODE" "REGISTRY KEY" "FILE CHECK" TEMPO ARCH
 ### EXECUTE_INSTALLATION_APPX "EXECUTABLE" "PKG Name" "PKG Version"
 
 #EXECUTE_INSTALLATION_MSI "7ZIP V18.01.msi" "" "/qn /l* `"C:\temp\sccm_logs\Install_7ZIP V18.01.log`"" "{23170F69-40C1-2702-1801-000001000000}" "" "" 0 64
@@ -757,7 +745,7 @@ If ($Global:Err_Return -eq 0)
 If ($Global:Err_Return -eq 0)
 {
 	### Execute other actions: Copy file, shortcuts...
-	CLS_SETREGSIGN $Application_Name $Application_Version $Editor $Install_Path $Technologie $Arch
+	INVENTORY_SETREGSIGN $Application_Name $Application_Version $Editor $Install_Path $Technologie $Arch
 }
 
 ######################################## END Installation #####################################

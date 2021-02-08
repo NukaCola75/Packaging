@@ -1,9 +1,9 @@
 ############################################################################################
-######################################## 27/02/2019 ########################################
-########################################   V03.00   ########################################
+######################################## 08/02/2021 ########################################
+########################################   V03.50   ########################################
 ###################################### RemovingScript ######################################
 ############################################################################################
-# .Net methods - Masque la fenetre powershell
+# .Net methods - For hiding powershell console host
 #Add-Type -Name Window -Namespace Console -MemberDefinition '
 #[DllImport("Kernel32.dll")]
 #public static extern IntPtr GetConsoleWindow();
@@ -22,7 +22,8 @@
 ######################################## BEGIN GLOBAL variables declaration ########################################
 
 
-$ScriptVersion = "V03.00 - 27/02/2019"
+$ScriptVersion = "V03.50 - 02/08/2021"							# English date format
+$CompanyHive = ""												# Provide your company name here
 $OSVersion = [Environment]::OSVersion                           # Detect Windows version
 $OSLang = Get-Culture                                           # Detect Windows language
 $InstallDate = Get-Date                                         # Get current date
@@ -57,7 +58,7 @@ function WriteInEventLog($EventCat, $ErrorType, $Step, $Result, $ErrorText)
 	If ($Installtype -eq "SYSTEM")
 	{
 		$EventMessage = "Step: $Step.`n Action: $Result `r Error Type: $ErrorText"
-		Write-EventLog –LogName "CLS_Script" –Source $Global:SourceName –EntryType $ErrorType –EventID $EventCat –Message $EventMessage
+		Write-EventLog -LogName $CompanyHive"_Script" -Source $Global:SourceName -EntryType $ErrorType -EventID $EventCat -Message $EventMessage
 	}
 }
 
@@ -95,7 +96,7 @@ Function KILL_PROCESS($Process_ToKill)
 
 
 # Remove the application signature for inventory
-Function CLS_REMOVEREGSIGN($App_Name, $App_Version, $Archi)
+Function INVENTORY_REMOVEREGSIGN($App_Name, $App_Version, $Archi)
 {
 	$Reg_Name = $App_Name + " " + $App_Version
 	If ($Archi -eq 32)
@@ -123,9 +124,9 @@ Function CLS_REMOVEREGSIGN($App_Name, $App_Version, $Archi)
 
 	Try
 	{
-		If (Test-Path -path $path\CLS\INVENTORY\Packages\$Reg_Name)
+		If (Test-Path -path $path\$CompanyHive\INVENTORY\Packages\$Reg_Name)
 		{
-			Remove-Item $path\CLS\INVENTORY\Packages\$Reg_Name -force -ErrorAction 'SilentlyContinue'
+			Remove-Item $path\$CompanyHive\INVENTORY\Packages\$Reg_Name -force -ErrorAction 'SilentlyContinue'
 
 			LOG_WRITE "Remove application signature:" "Success"
 			WriteInEventLog 1 Information "Remove application signature:" "Success" "Application signature removed."
@@ -432,21 +433,8 @@ $Reboot_Code = 0                # 3010 for reboot
 ######################################## Begin Bloc ###############################
 
 $Global:SourceName = "SCCM_" + $Application_Name + "_" + $Application_Version
-If ([System.Diagnostics.EventLog]::SourceExists("CLS_Script") -Match $false -And (New-Object Security.Principal.WindowsPrincipal $user).IsInRole([Security.Principal.WindowsBuiltinRole]::Administrator)) 
-{
-    New-EventLog -LogName "CLS_Script" -Source $Global:SourceName -ErrorAction 'SilentlyContinue'
-}
-If ([System.Diagnostics.EventLog]::SourceExists("CLS_Script") -Match $true -And (New-Object Security.Principal.WindowsPrincipal $user).IsInRole([Security.Principal.WindowsBuiltinRole]::Administrator)) 
-{
-    Try 
-    {
-        New-EventLog -LogName "CLS_Script" -Source $Global:SourceName -ErrorAction 'SilentlyContinue'
-    }
-    Catch 
-    {
 
-    }
-}
+New-EventLog -LogName $CompanyHive"_Script" -Source $Global:SourceName -ErrorAction 'SilentlyContinue'
 
 $RepTemp = (Test-Path -path 'C:\temp')
 $RepLog = (Test-Path -path 'C:\temp\sccm_logs')
@@ -485,8 +473,8 @@ KILL_PROCESS $Kill_Process
 If ($Global:Err_Return -eq 0)
 {
     ### Execute other actions: Suppress file, shortcuts...
-    CLS_REMOVEREGSIGN $Application_Name $Application_Version $Arch
-}        
+    INVENTORY_REMOVEREGSIGN $Application_Name $Application_Version $Arch
+}
 
 ######################################## END Removing ########################################
 
