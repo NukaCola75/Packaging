@@ -56,7 +56,7 @@ Elle peut être laissée vide si aucune action de migration n'est nécessaire.
 If ($Global:Err_Return -eq 0)
 {
 	### Execute other actions: Suppress file, shortcuts...
-	#CLS_REMOVEREGSIGN "APP NAME" "APP VERSION" $Arch
+	#INVENTORY_REMOVEREGSIGN "APP NAME" "APP VERSION" $Arch
 }
 
 ######################################## END Migration ########################################
@@ -95,15 +95,15 @@ If ($Global:Err_Return -eq 0)
 {
 	### Execute other actions: Suppress file, shortcuts...
 	Remove-Item "C:\Users\public\Desktop\Google Chrome.lnk" -force -ErrorAction 'SilentlyContinue'
-	CLS_REMOVEREGSIGN "GOOGLE CHROME" "V75.0" $Arch
+	INVENTORY_REMOVEREGSIGN "GOOGLE CHROME" "V75.0" $Arch
 }
 ```
 
 ### Suppression de la signature d'une application
-**Dans tous les cas, décommenter et/ou ajouter autant d'appel à la fonction "CLS_REMOVEREGSIGN" que nécessaire !**
+**Dans tous les cas, décommenter et/ou ajouter autant d'appel à la fonction "INVENTORY_REMOVEREGSIGN" que nécessaire !**
 
 Exemple:
-`CLS_REMOVEREGSIGN "GOOGLE CHROME" "V64.0" 64`
+`INVENTORY_REMOVEREGSIGN "GOOGLE CHROME" "V64.0" 64`
 
 **Trois paramètres obligatoires:**
 1. Le nom de l'application migrée.
@@ -178,14 +178,14 @@ La partie "installation" du script dispose également d'un bloc de customisation
 If ($Global:Err_Return -eq 0)
 {
 	### Execute other actions: Copy file, shortcuts...
-	CLS_SETREGSIGN $Application_Name $Application_Version $Editor $Install_Path $Technologie $Arch
+	INVENTORY_SETREGSIGN $Application_Name $Application_Version $Editor $Install_Path $Technologie $Arch
 }
 ```
 Vous pouvez ajouter ici toutes les autres actions qui dépendent de la réussite de l'installation de l'application.
 
 ### Signature de l'application
 La signature de l'application est appelée automatiquement si l'installation est réussie par l'appel suivant:
-`CLS_SETREGSIGN $Application_Name $Application_Version $Editor $Install_Path $Technologie $Arch`
+`INVENTORY_SETREGSIGN $Application_Name $Application_Version $Editor $Install_Path $Technologie $Arch`
 
 # Remove.ps1
 Utilisation du script "Remove.ps1".
@@ -239,13 +239,13 @@ If ($Global:Err_Return -eq 0)
 {
 	### Execute other actions: Suppress file, shortcuts...
 	Remove-Item "C:\Users\public\Desktop\Google Chrome.lnk" -force -ErrorAction 'SilentlyContinue'
-	CLS_REMOVEREGSIGN $Application_Name $Application_Version $Arch
+	INVENTORY_REMOVEREGSIGN $Application_Name $Application_Version $Arch
 }
 ```
 
 ### Suppression de la signature d'une application
-L'appel à la fonction "CLS_REMOVEREGSIGN" est automatique:
-`CLS_REMOVEREGSIGN $Application_Name $Application_Version $Arch`
+L'appel à la fonction "INVENTORY_REMOVEREGSIGN" est automatique:
+`INVENTORY_REMOVEREGSIGN $Application_Name $Application_Version $Arch`
 
 # Journalisation
 Un fichier .log est crée dans "C:\temp\sccm_logs".
