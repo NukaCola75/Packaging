@@ -22,8 +22,8 @@
 ######################################## BEGIN GLOBAL variables declaration ########################################
 
 
-$ScriptVersion = "V03.50 - 02/08/2021"							# English date format
-$CompanyHive = ""												# Provide your company name here
+$ScriptVersion = "V04.00 - 09/01/2024"							# English date format
+$CompanyHive = "Cosmos IT"												# Provide your company name here
 $OSVersion = [Environment]::OSVersion                           # Detect Windows version
 $OSLang = Get-Culture                                           # Detect Windows language
 $InstallDate = Get-Date                                         # Get current date
@@ -84,7 +84,7 @@ Function KILL_PROCESS($Process_ToKill)
 		WriteInEventLog 1 Information "Kill process" $Process "Process to kill."
 		Try 
 		{
-			Stop-Process -name $process -force -ErrorAction 'SilentlyContinue'
+			Stop-Process -name $process -force -ErrorAction 'Stop'
 		}
 		Catch [Microsoft.PowerShell.Commands.ProcessCommandException]
 		{
@@ -194,24 +194,35 @@ Function INVENTORY_REMOVEREGSIGN($App_Name, $App_Version, $Archi)
 # Detect application on the computer
 Function DETECT_INSTALLATION($ProductCode_ToCheck, $Key_ToCheck, $File_ToCheck, $regPart)
 {
+    $detectionTable = @{
+        ProductCodeCheck = $false;
+        ProductCodeDetect = $false;
+        ProductCode_ToCheck_isEmpty = $true;
+        RegCheck = $false;
+		KeyDetect = $false;
+		Key_ToCheck_isEmpty = $true;
+        FileCheck = $false;
+        FileDetect = $false;
+        File_ToCheck_isEmpty = $true;
+    }
 	########## For MSI product code ##########
 	If ([string]::IsNullOrEmpty($ProductCode_ToCheck))
 	{
-		$Global:ProductCodeCheck = $false
-		$Global:ProductCodeDetect = $false
-		$Global:ProductCode_ToCheck_isEmpty = $true
+		$detectionTable.ProductCodeCheck = $false
+		$detectionTable.ProductCodeDetect = $false
+		$detectionTable.ProductCode_ToCheck_isEmpty = $true
 	}
 	Else
 	{
-		$Global:ProductCodeCheck = $true
+		$detectionTable.ProductCodeCheck = $true
 		$TestProductCode = Get-WmiObject -Class win32_product | Where-Object IdentifyingNumber -eq $ProductCode_ToCheck
 		If ($TestProductCode)
 		{
-			$Global:ProductCodeDetect = $true
+			$detectionTable.ProductCodeDetect = $true
 		}
 		else
 		{
-			$Global:ProductCodeDetect = $false
+			$detectionTable.ProductCodeDetect = $false
 		}
 	}
 
@@ -219,9 +230,9 @@ Function DETECT_INSTALLATION($ProductCode_ToCheck, $Key_ToCheck, $File_ToCheck, 
 	########## For registry key ##########
 	If ([string]::IsNullOrEmpty($Key_ToCheck)) #Verification si la cle registre est renseignee
 	{
-		$Global:RegCheck = $false
-		$Global:KeyDetect = $false
-		$Global:Key_ToCheck_isEmpty = $true
+		$detectionTable.RegCheck = $false
+		$detectionTable.KeyDetect = $false
+		$detectionTable.Key_ToCheck_isEmpty = $true
 	}
 	Else
 	{
@@ -249,29 +260,29 @@ Function DETECT_INSTALLATION($ProductCode_ToCheck, $Key_ToCheck, $File_ToCheck, 
 		}
 		$regkey = $CurrentV + $Key_ToCheck
 
-		$Global:RegCheck = $true
+		$detectionTable.RegCheck = $true
 		$KeyExist = Test-Path $regkey
 
 		If ($KeyExist -eq $true)
 		{
-			$Global:KeyDetect = $true
+			$detectionTable.KeyDetect = $true
 		}
 		Else
 		{
-			$Global:KeyDetect = $false
+			$detectionTable.KeyDetect = $false
 		}
 	}
 
 	########## For file ##########
 	If ([string]::IsNullOrEmpty($File_ToCheck))
 	{
-		$Global:FileCheck = $false
-		$Global:FileDetect = $false
-		$Global:File_ToCheck_isEmpty = $true
+		$detectionTable.FileCheck = $false
+		$detectionTable.FileDetect = $false
+		$detectionTable.File_ToCheck_isEmpty = $true
 	}
 	Else
 	{
-		$Global:FileCheck = $true
+		$detectionTable.FileCheck = $true
 		$PosLastAntiSlash = $File_ToCheck.LastIndexOf("\")
 		$file = $File_ToCheck.Substring($PosLastAntiSlash+1)
 		$filepath = $File_ToCheck.Substring(0, $PosLastAntiSlash)
@@ -292,11 +303,11 @@ Function DETECT_INSTALLATION($ProductCode_ToCheck, $Key_ToCheck, $File_ToCheck, 
 			$TestFile = Test-Path $File_ToCheck
 			If ($TestFile -eq $True)
 			{
-				$Global:FileDetect = $true
+				$detectionTable.FileDetect = $true
 			}
 			Else
 			{
-				$Global:FileDetect = $false
+				$detectionTable.FileDetect = $false
 			}
 		}
 		Else
@@ -307,41 +318,39 @@ Function DETECT_INSTALLATION($ProductCode_ToCheck, $Key_ToCheck, $File_ToCheck, 
 				$InstalledFileVersion = ([System.Diagnostics.FileVersionInfo]::GetVersionInfo($Filename_AndPath).FileVersion)
 				If ($InstalledFileVersion -eq $FileVersion)
 				{
-					$Global:FileDetect = $true
+					$detectionTable.FileDetect = $true
 				}
 				Else
 				{
-					$Global:FileDetect = $false
+					$detectionTable.FileDetect = $false
 				}
 			}
 			Else
 			{
-				$Global:FileDetect = $false
+				$detectionTable.FileDetect = $false
 			}
 		}
 	}
+    return $detectionTable
 }
 
 
 # Detect APPX application (Microsoft Store)
 Function DETECT_APPX($Name)
 {
-	$Global:scanAppx = (Get-AppxPackage -Name $Name -User $user)
-	$Global:AppxName = ($Global:scanAppx).Name
-	$Global:AppxVersion = ($Global:scanAppx).Version
-	$Global:AppxLocation = ($Global:scanAppx).InstallLocation
-	$Global:AppxFullName = ($Global:scanAppx).PackageFullName
+	$scanAppx = (Get-AppxPackage -Name $Name -User $user)
+	return $scanAppx
 }
 
 
 # Install MSI file
 Function EXECUTE_INSTALLATION_MSI($InstallFile, $Transform, $InstallParameters, $ProductCode, $Registry_Key, $File_Check, $Tempo, $regPart) 
 {
-	DETECT_INSTALLATION $ProductCode $Registry_Key $File_Check $regPart
+	$InstallTable = DETECT_INSTALLATION $ProductCode $Registry_Key $File_Check $regPart
 
 	if ($Global:Err_Return -eq 0)
 	{
-		if (($Global:FileDetect -eq $false -AND $Global:KeyDetect -eq $false -AND $Global:ProductCodeDetect -eq $false) -OR ($Global:Key_ToCheck_isEmpty -eq $true -AND $Global:File_ToCheck_isEmpty -eq $true -AND $Global:ProductCode_ToCheck_isEmpty -eq $true))
+		if (($InstallTable.FileDetect -eq $false -AND $InstallTable.KeyDetect -eq $false -AND $InstallTable.ProductCodeDetect -eq $false) -OR ($InstallTable.Key_ToCheck_isEmpty -eq $true -AND $InstallTable.File_ToCheck_isEmpty -eq $true -AND $InstallTable.ProductCode_ToCheck_isEmpty -eq $true))
 		{
 			$Arguments = "/i `"$InstallFile`" TRANSFORMS=`"$Transform`" $InstallParameters"
 
@@ -354,16 +363,16 @@ Function EXECUTE_INSTALLATION_MSI($InstallFile, $Transform, $InstallParameters, 
 			LOG_WRITE "Wait required:" $Tempo " seconds"
 			Start-Sleep -s $Tempo
 
-			DETECT_INSTALLATION $ProductCode $Registry_Key $File_Check $regPart
+			$InstallTable = DETECT_INSTALLATION $ProductCode $Registry_Key $File_Check $regPart
 
-			if (($Global:FileDetect -eq $true) -OR ($Global:KeyDetect -eq $true) -OR ($Global:ProductCodeDetect -eq $true) -OR ($Global:Key_ToCheck_isEmpty -eq $true -AND $Global:File_ToCheck_isEmpty -eq $true -AND $Global:ProductCode_ToCheck_isEmpty -eq $true))
+			if (($InstallTable.FileDetect -eq $true) -OR ($InstallTable.KeyDetect -eq $true) -OR ($InstallTable.ProductCodeDetect -eq $true) -OR ($InstallTable.Key_ToCheck_isEmpty -eq $true -AND $InstallTable.File_ToCheck_isEmpty -eq $true -AND $InstallTable.ProductCode_ToCheck_isEmpty -eq $true))
 			{
 				LOG_WRITE "Installation Success:" $InstallFile
 				WriteInEventLog 1 Information "Installation:" $InstallFile "Installation Success."
 			}
 			else 
 			{
-				$Global:Err_Return = 1
+				$Global:Err_Return++
 				LOG_WRITE "Installation Failed:" $InstallFile
 				WriteInEventLog 3 Error "Installation Failed:" $InstallFile "Oh no ! I don't have a brain..."
 			}
@@ -380,11 +389,11 @@ Function EXECUTE_INSTALLATION_MSI($InstallFile, $Transform, $InstallParameters, 
 # Install MSI patch (MSP)
 Function EXECUTE_PATCH_MSI($InstallFile, $InstallParameters, $ProductCode, $Registry_Key, $File_Check, $Tempo, $regPart) 
 {
-	DETECT_INSTALLATION $ProductCode $Registry_Key $File_Check $regPart
+	$InstallTable = DETECT_INSTALLATION $ProductCode $Registry_Key $File_Check $regPart
 
 	if ($Global:Err_Return -eq 0) 
 	{
-		if (($Global:FileDetect -eq $false -AND $Global:KeyDetect -eq $false -AND $Global:ProductCodeDetect -eq $false) -OR ($Global:Key_ToCheck_isEmpty -eq $true -AND $Global:File_ToCheck_isEmpty -eq $true -AND $Global:ProductCode_ToCheck_isEmpty -eq $true))
+		if (($InstallTable.FileDetect -eq $false -AND $InstallTable.KeyDetect -eq $false -AND $InstallTable.ProductCodeDetect -eq $false) -OR ($InstallTable.Key_ToCheck_isEmpty -eq $true -AND $InstallTable.File_ToCheck_isEmpty -eq $true -AND $InstallTable.ProductCode_ToCheck_isEmpty -eq $true))
 		{
 			$Arguments = "/p `"$InstallFile`" $InstallParameters"
 
@@ -397,16 +406,16 @@ Function EXECUTE_PATCH_MSI($InstallFile, $InstallParameters, $ProductCode, $Regi
 			LOG_WRITE "Wait required:" $Tempo " seconds"
 			Start-Sleep -s $Tempo
 
-			DETECT_INSTALLATION $ProductCode $Registry_Key $File_Check $regPart
+			$InstallTable = DETECT_INSTALLATION $ProductCode $Registry_Key $File_Check $regPart
 
-			if (($Global:FileDetect -eq $true) -OR ($Global:KeyDetect -eq $true) -OR ($Global:ProductCodeDetect -eq $true) -OR ($Global:Key_ToCheck_isEmpty -eq $true -AND $Global:File_ToCheck_isEmpty -eq $true -AND $Global:ProductCode_ToCheck_isEmpty -eq $true))
+			if (($InstallTable.FileDetect -eq $true) -OR ($InstallTable.KeyDetect -eq $true) -OR ($InstallTable.ProductCodeDetect -eq $true) -OR ($InstallTable.Key_ToCheck_isEmpty -eq $true -AND $InstallTable.File_ToCheck_isEmpty -eq $true -AND $InstallTable.ProductCode_ToCheck_isEmpty -eq $true))
 			{
 				LOG_WRITE "Installation Success:" $InstallFile
 				WriteInEventLog 1 Information "Installation Success:" $InstallFile "Patch installation success. I'm the best !"
 			}
 			else 
 			{
-				$Global:Err_Return = 1
+				$Global:Err_Return++
 				LOG_WRITE "Installation Failed:" $InstallFile
 				WriteInEventLog 3 Error "Installation Failed:" $InstallFile "Patch installation failed. Please, don't tell it to mom !"
 			}
@@ -423,11 +432,11 @@ Function EXECUTE_PATCH_MSI($InstallFile, $InstallParameters, $ProductCode, $Regi
 # Install EXE file
 Function EXECUTE_INSTALLATION_EXE($InstallFile, $InstallParameters, $Registry_Key, $File_Check, $Tempo, $regPart) 
 {
-	DETECT_INSTALLATION "" $Registry_Key $File_Check $regPart
+	$InstallTable = DETECT_INSTALLATION "" $Registry_Key $File_Check $regPart
 	
 	if ($Global:Err_Return -eq 0) 
 	{
-		if (($Global:FileDetect -eq $false -AND $Global:KeyDetect -eq $false) -OR ($Global:Key_ToCheck_isEmpty -eq $true -AND $Global:File_ToCheck_isEmpty -eq $true))
+		if (($InstallTable.FileDetect -eq $false -AND $InstallTable.KeyDetect -eq $false) -OR ($InstallTable.Key_ToCheck_isEmpty -eq $true -AND $InstallTable.File_ToCheck_isEmpty -eq $true))
 		{
 			LOG_WRITE "Application installation:" $InstallFile
 			WriteInEventLog 1 Information "Application installation:" $InstallFile "Application installation."
@@ -438,16 +447,16 @@ Function EXECUTE_INSTALLATION_EXE($InstallFile, $InstallParameters, $Registry_Ke
 			LOG_WRITE "Wait required:" $Tempo " seconds"
 			Start-Sleep -s $Tempo
 
-			DETECT_INSTALLATION "" $Registry_Key $File_Check $regPart
+			$InstallTable = DETECT_INSTALLATION "" $Registry_Key $File_Check $regPart
 
-			if (($Global:FileDetect -eq $true) -OR ($Global:KeyDetect -eq $true) -OR ($Global:Key_ToCheck_isEmpty -eq $true -AND $Global:File_ToCheck_isEmpty -eq $true)) 
+			if (($InstallTable.FileDetect -eq $true) -OR ($InstallTable.KeyDetect -eq $true) -OR ($InstallTable.Key_ToCheck_isEmpty -eq $true -AND $InstallTable.File_ToCheck_isEmpty -eq $true)) 
 			{
 				LOG_WRITE "Installation Success:" $InstallFile
 				WriteInEventLog 1 Information "Installation Success:" $InstallFile "Application installed. Oh yeah baby !"
 			}
 			else 
 			{
-				$Global:Err_Return = 1
+				$Global:Err_Return++
 				LOG_WRITE "Installation failed:" $InstallFile
 				WriteInEventLog 3 Error "Installation failed:" $InstallFile "Application not installed. I need a break..."
 			}
@@ -466,67 +475,67 @@ Function EXECUTE_INSTALLATION_APPX($InstallExec, $InstallName, $Version)
 {
 	$InstallFile = $PathExecute + "\" + $InstallExec
 
-	DETECT_APPX $InstallName
+	$appxEntry = DETECT_APPX $InstallName
 
-	If ([string]::IsNullOrEmpty($Global:scanAppx))
+	If ([string]::IsNullOrEmpty($appxEntry))
 	{
 		Add-AppxPackage -Path $InstallFile -ForceApplicationShutdown -ErrorAction 'SilentlyContinue'
 
-		DETECT_APPX $InstallName
+		$appxEntry = DETECT_APPX $InstallName
 
-		If (($Global:AppxName -eq $InstallName) -AND ($Global:AppxVersion -eq $Version))
+		If (($appxEntry.Name -eq $InstallName) -AND ($appxEntry.Version -eq $Version))
 		{
-			LOG_WRITE "Installation Success:" $Global:AppxName
-			WriteInEventLog 1 Information "Installation Success:" $Global:AppxName "Installation Success. Time to take a break."
+			LOG_WRITE "Installation Success:" $appxEntry.Name
+			WriteInEventLog 1 Information "Installation Success:" $appxEntry.Name "Installation Success. Time to take a break."
 		}
 		else 
 		{
-			$Global:Err_Return = 1
+			$Global:Err_Return++
 			LOG_WRITE "Installation failed:" $InstallFile
 			WriteInEventLog 3 Error "Installation failed:" $InstallFile "Installation failed. It's not my fault, don't kick me please..."
 		} 
 	}
-	elseif ($Global:AppxVersion -eq $Version) 
+	elseif ($appxEntry.Version -eq $Version) 
 	{
-		LOG_WRITE "Application already installed:" $Global:AppxName
-		WriteInEventLog 1 Information "Application already installed:" $Global:AppxName "Application already installed..."
+		LOG_WRITE "Application already installed:" $appxEntry.Name
+		WriteInEventLog 1 Information "Application already installed:" $appxEntry.Name "Application already installed..."
 	}
 	else 
 	{
-		Remove-AppxPackage -Package $Global:AppxFullName -ErrorAction 'SilentlyContinue'
+		Remove-AppxPackage -Package $appxEntry.PackageFullName -ErrorAction 'SilentlyContinue'
 
-		LOG_WRITE "Migration:" $Global:AppxName
-		WriteInEventLog 1 Information "Migration:" $Global:AppxName "Application migration in progress. I don't like old stuff."
+		LOG_WRITE "Migration:" $appxEntry.Name
+		WriteInEventLog 1 Information "Migration:" $appxEntry.Name "Application migration in progress. I don't like old stuff."
 
-		DETECT_APPX $InstallName
+		$appxEntry = DETECT_APPX $InstallName
 
-		If ([string]::IsNullOrEmpty($Global:scanAppx))
+		If ([string]::IsNullOrEmpty($appxEntry))
 		{
-			LOG_WRITE "Migration success:" $Global:AppxName
-			WriteInEventLog 1 Information "Migration success:" $Global:AppxName "Migration success. :)"
+			LOG_WRITE "Migration success:" $appxEntry.Name
+			WriteInEventLog 1 Information "Migration success:" $appxEntry.Name "Migration success. :)"
 
 			If ($Global:Err_Return -eq 0)
 			{
 				Add-AppxPackage -Path $InstallFile -ForceApplicationShutdown -ErrorAction 'SilentlyContinue'
 
-				DETECT_APPX $InstallName
+				$appxEntry = DETECT_APPX $InstallName
 
-				If (([String]::IsNullOrEmpty($Global:scanAppx)) -OR ($Global:AppxVersion -ne $Version))
+				If (([String]::IsNullOrEmpty($appxEntry)) -OR ($appxEntry.Version -ne $Version))
 				{
-					$Global:Err_Return = 1
+					$Global:Err_Return++
 					LOG_WRITE "Installation failed:" $InstallFile
 					WriteInEventLog 3 Error "Installation failed:" $InstallFile "Installation failed. Ooops"
 				}
 				else 
 				{
-					LOG_WRITE "Installation success:" $Global:AppxName
-					WriteInEventLog 1 Information "Installation success:" $Global:AppxName "Installation success. Yeah !"
+					LOG_WRITE "Installation success:" $appxEntry.Name
+					WriteInEventLog 1 Information "Installation success:" $appxEntry.Name "Installation success. Yeah !"
 				}
 			}
 		}
 		else 
 		{
-			$Global:Err_Return = 1
+			$Global:Err_Return++
 			LOG_WRITE "Migration failed:" $InstallFile
 			WriteInEventLog 3 Error "Migration failed:" $InstallFile "Migration failed. I need administrator's help..."
 		}
@@ -567,11 +576,11 @@ Function EXECUTE_INSTALLATION_MSU($InstallExec)
 # MSI Migration
 Function EXECUTE_MIGRATION_MSI($Product_Code, $Parameters, $ProductCode, $Registry_Key, $File_Check, $Tempo, $regPart)
 {
-	DETECT_INSTALLATION $ProductCode $Registry_Key $File_Check $regPart
+	$InstallTable = DETECT_INSTALLATION $ProductCode $Registry_Key $File_Check $regPart
 
 	if ($Global:Err_Return -eq 0) 
 	{
-		if (($Global:FileDetect -eq $true -OR $Global:KeyDetect -eq $true -OR $Global:ProductCodeDetect -eq $true) -OR ($Global:Key_ToCheck_isEmpty -eq $true -AND $Global:File_ToCheck_isEmpty -eq $true -AND $Global:ProductCode_ToCheck_isEmpty -eq $true)) 
+		if (($InstallTable.FileDetect -eq $true -OR $InstallTable.KeyDetect -eq $true -OR $InstallTable.ProductCodeDetect -eq $true) -OR ($InstallTable.Key_ToCheck_isEmpty -eq $true -AND $InstallTable.File_ToCheck_isEmpty -eq $true -AND $InstallTable.ProductCode_ToCheck_isEmpty -eq $true)) 
 		{
 			LOG_WRITE "Application migration:" $Product_Code
 			WriteInEventLog 1 Information "Application migration:" $Product_Code "Application migration. Va de retro Satanas !"
@@ -584,16 +593,16 @@ Function EXECUTE_MIGRATION_MSI($Product_Code, $Parameters, $ProductCode, $Regist
 			LOG_WRITE "Wait required:" $Tempo " seconds"
 			Start-Sleep -s $Tempo
 
-			DETECT_INSTALLATION $ProductCode $Registry_Key $File_Check $regPart
+			$InstallTable = DETECT_INSTALLATION $ProductCode $Registry_Key $File_Check $regPart
 
-			if (($Global:FileDetect -eq $false -AND $Global:KeyDetect -eq $false -AND $Global:ProductCodeDetect -eq $false) -OR ($Global:Key_ToCheck_isEmpty -eq $true -AND $Global:File_ToCheck_isEmpty -eq $true -AND $Global:ProductCode_ToCheck_isEmpty -eq $true)) 
+			if (($InstallTable.FileDetect -eq $false -AND $InstallTable.KeyDetect -eq $false -AND $InstallTable.ProductCodeDetect -eq $false) -OR ($InstallTable.Key_ToCheck_isEmpty -eq $true -AND $InstallTable.File_ToCheck_isEmpty -eq $true -AND $InstallTable.ProductCode_ToCheck_isEmpty -eq $true)) 
 			{
 				LOG_WRITE "Migration success:" $Product_Code
 				WriteInEventLog 1 Information "Migration success:" $Product_Code "Migration success. The devil is gone !"
 			}
 			else 
 			{
-				$Global:Err_Return = 1
+				$Global:Err_Return++
 				LOG_WRITE "Migration failed:" $Product_Code
 				WriteInEventLog 3 Error "Migration failed:" $Product_Code "Migration failed. Run ! He is coming for you !"
 			}
@@ -610,11 +619,11 @@ Function EXECUTE_MIGRATION_MSI($Product_Code, $Parameters, $ProductCode, $Regist
 # EXE Migration
 Function EXECUTE_MIGRATION_EXE($RemoveExe, $Parameters, $Registry_Key, $File_Check, $Tempo, $regPart)
 {
-	DETECT_INSTALLATION "" $Registry_Key $File_Check $regPart
+	$InstallTable = DETECT_INSTALLATION "" $Registry_Key $File_Check $regPart
 
 	if ($Global:Err_Return -eq 0) 
 	{
-		if (($Global:FileDetect -eq $true -OR $Global:KeyDetect -eq $true) -OR ($Global:Key_ToCheck_isEmpty -eq $true -AND $Global:File_ToCheck_isEmpty -eq $true))
+		if (($InstallTable.FileDetect -eq $true -OR $InstallTable.KeyDetect -eq $true) -OR ($InstallTable.Key_ToCheck_isEmpty -eq $true -AND $InstallTable.File_ToCheck_isEmpty -eq $true))
 		{
 			LOG_WRITE "Application migration:" $RemoveExe
 			WriteInEventLog 1 Information "Application migration:" $RemoveExe "Application migration. I have nothing to tell you."
@@ -625,16 +634,16 @@ Function EXECUTE_MIGRATION_EXE($RemoveExe, $Parameters, $Registry_Key, $File_Che
 			LOG_WRITE "Wait required:" $Tempo " seconds"
 			Start-Sleep -s $Tempo
 
-			DETECT_INSTALLATION "" $Registry_Key $File_Check $regPart
+			$InstallTable = DETECT_INSTALLATION "" $Registry_Key $File_Check $regPart
 
-			if (($Global:FileDetect -eq $false -AND $Global:KeyDetect -eq $false) -OR ($Global:Key_ToCheck_isEmpty -eq $true -AND $Global:File_ToCheck_isEmpty -eq $true)) 
+			if (($InstallTable.FileDetect -eq $false -AND $InstallTable.KeyDetect -eq $false) -OR ($InstallTable.Key_ToCheck_isEmpty -eq $true -AND $InstallTable.File_ToCheck_isEmpty -eq $true)) 
 			{
 				LOG_WRITE "Migration success:" $RemoveExe
 				WriteInEventLog 1 Information "Migration success:" $RemoveExe "Migration success. Thanks to me."
 			}
 			else 
 			{
-				$Global:Err_Return = 1
+				$Global:Err_Return++
 				LOG_WRITE "Migration failed:" $RemoveExe
 				WriteInEventLog 3 Error "Migration failed:" $RemoveExe "Migration failed. I'm a bad computer !"
 			}
@@ -673,7 +682,7 @@ $Application_Version = ""       # Application version
 $Editor = ""                    # Editor
 $Install_Path = ""              # Install folder of the application
 $Technologie = ""               # MSI, EXE, APPX, CAB, MSU or SCRIPT
-$Arch =                         # 32 or 64
+$Arch = 64                        # 32 or 64
 $Kill_Process = @()             # Process to kil. If neccessary. Ex: $Kill_Process = @("chrome","iexplore","firefox")
 $Reboot_Code = 0                # 3010 for reboot - 0 by default
 
@@ -740,7 +749,6 @@ If ($Global:Err_Return -eq 0)
 #EXECUTE_INSTALLATION_APPX "CheckPointVPN_1.0.14.0_x64.Appx" "B4D42709.CheckPointVPN" 1.0.14.0
 #EXECUTE_INSTALLATION_CAB "moncab.CAB"
 #EXECUTE_INSTALLATION_MSU "monkb.MSU"
-
 
 If ($Global:Err_Return -eq 0)
 {

@@ -22,7 +22,7 @@
 ######################################## BEGIN GLOBAL variables declaration ########################################
 
 
-$ScriptVersion = "V03.50 - 02/08/2021"							# English date format
+$ScriptVersion = "V04.00 - 09/01/2024"							# English date format
 $CompanyHive = ""												# Provide your company name here
 $OSVersion = [Environment]::OSVersion                           # Detect Windows version
 $OSLang = Get-Culture                                           # Detect Windows language
@@ -84,7 +84,7 @@ Function KILL_PROCESS($Process_ToKill)
 		WriteInEventLog 1 Information "Kill process" $Process "Process to kill."
 		Try 
 		{
-			Stop-Process -name $process -force -ErrorAction 'SilentlyContinue'
+			Stop-Process -name $process -force -ErrorAction 'Stop'
 		}
 		Catch [Microsoft.PowerShell.Commands.ProcessCommandException]
 		{
@@ -143,24 +143,36 @@ Function INVENTORY_REMOVEREGSIGN($App_Name, $App_Version, $Archi)
 # Detect application on the computer
 Function DETECT_INSTALLATION($ProductCode_ToCheck, $Key_ToCheck, $File_ToCheck, $regPart)
 {
+	$detectionTable = @{
+        ProductCodeCheck = $false;
+        ProductCodeDetect = $false;
+        ProductCode_ToCheck_isEmpty = $true;
+        RegCheck = $false;
+		KeyDetect = $false;
+		Key_ToCheck_isEmpty = $true;
+        FileCheck = $false;
+        FileDetect = $false;
+        File_ToCheck_isEmpty = $true;
+    }
+
 	########## For MSI product code ##########
 	If ([string]::IsNullOrEmpty($ProductCode_ToCheck))
 	{
-		$Global:ProductCodeCheck = $false
-		$Global:ProductCodeDetect = $false
-		$Global:ProductCode_ToCheck_isEmpty = $true
+		$detectionTable.ProductCodeCheck = $false
+		$detectionTable.ProductCodeDetect = $false
+		$detectionTable.ProductCode_ToCheck_isEmpty = $true
 	}
 	Else
 	{
-		$Global:ProductCodeCheck = $true
+		$detectionTable.ProductCodeCheck = $true
 		$TestProductCode = Get-WmiObject -Class win32_product | Where-Object IdentifyingNumber -eq $ProductCode_ToCheck
 		If ($TestProductCode)
 		{
-			$Global:ProductCodeDetect = $true
+			$detectionTable.ProductCodeDetect = $true
 		}
 		else
 		{
-			$Global:ProductCodeDetect = $false
+			$detectionTable.ProductCodeDetect = $false
 		}
 	}
 
@@ -168,9 +180,9 @@ Function DETECT_INSTALLATION($ProductCode_ToCheck, $Key_ToCheck, $File_ToCheck, 
 	########## For registry key ##########
 	If ([string]::IsNullOrEmpty($Key_ToCheck)) #Verification si la cle registre est renseignee
 	{
-		$Global:RegCheck = $false
-		$Global:KeyDetect = $false
-		$Global:Key_ToCheck_isEmpty = $true
+		$detectionTable.RegCheck = $false
+		$detectionTable.KeyDetect = $false
+		$detectionTable.Key_ToCheck_isEmpty = $true
 	}
 	Else
 	{
@@ -198,29 +210,29 @@ Function DETECT_INSTALLATION($ProductCode_ToCheck, $Key_ToCheck, $File_ToCheck, 
 		}
 		$regkey = $CurrentV + $Key_ToCheck
 
-		$Global:RegCheck = $true
+		$detectionTable.RegCheck = $true
 		$KeyExist = Test-Path $regkey
 
 		If ($KeyExist -eq $true)
 		{
-			$Global:KeyDetect = $true
+			$detectionTable.KeyDetect = $true
 		}
 		Else
 		{
-			$Global:KeyDetect = $false
+			$detectionTable.KeyDetect = $false
 		}
 	}
 
 	########## For file ##########
 	If ([string]::IsNullOrEmpty($File_ToCheck))
 	{
-		$Global:FileCheck = $false
-		$Global:FileDetect = $false
-		$Global:File_ToCheck_isEmpty = $true
+		$detectionTable.FileCheck = $false
+		$detectionTable.FileDetect = $false
+		$detectionTable.File_ToCheck_isEmpty = $true
 	}
 	Else
 	{
-		$Global:FileCheck = $true
+		$detectionTable.FileCheck = $true
 		$PosLastAntiSlash = $File_ToCheck.LastIndexOf("\")
 		$file = $File_ToCheck.Substring($PosLastAntiSlash+1)
 		$filepath = $File_ToCheck.Substring(0, $PosLastAntiSlash)
@@ -241,11 +253,11 @@ Function DETECT_INSTALLATION($ProductCode_ToCheck, $Key_ToCheck, $File_ToCheck, 
 			$TestFile = Test-Path $File_ToCheck
 			If ($TestFile -eq $True)
 			{
-				$Global:FileDetect = $true
+				$detectionTable.FileDetect = $true
 			}
 			Else
 			{
-				$Global:FileDetect = $false
+				$detectionTable.FileDetect = $false
 			}
 		}
 		Else
@@ -256,60 +268,58 @@ Function DETECT_INSTALLATION($ProductCode_ToCheck, $Key_ToCheck, $File_ToCheck, 
 				$InstalledFileVersion = ([System.Diagnostics.FileVersionInfo]::GetVersionInfo($Filename_AndPath).FileVersion)
 				If ($InstalledFileVersion -eq $FileVersion)
 				{
-					$Global:FileDetect = $true
+					$detectionTable.FileDetect = $true
 				}
 				Else
 				{
-					$Global:FileDetect = $false
+					$detectionTable.FileDetect = $false
 				}
 			}
 			Else
 			{
-				$Global:FileDetect = $false
+				$detectionTable.FileDetect = $false
 			}
 		}
 	}
+	return $detectionTable
 }
 
 
-# Detect APPX application (Windows Store)
+# Detect APPX application (Microsoft Store)
 Function DETECT_APPX($Name)
 {
-    $Global:scanAppx = (Get-AppxPackage -Name $Name -User $user)
-    $Global:AppxName = ($Global:scanAppx).Name
-    $Global:AppxVersion = ($Global:scanAppx).Version
-    $Global:AppxLocation = ($Global:scanAppx).InstallLocation
-    $Global:AppxFullName = ($Global:scanAppx).PackageFullName
+	$scanAppx = (Get-AppxPackage -Name $Name -User $user)
+	return $scanAppx
 }
 
 
 # Uninstall APPX or APPXBUNDLE application
 Function EXECUTE_UNINSTALL_APPX($InstallName)
 {
-    DETECT_APPX $InstallName
+    $appxEntry = DETECT_APPX $InstallName
 
-    If ([string]::IsNullOrEmpty($Global:scanAppx))
+    If ([string]::IsNullOrEmpty($appxEntry))
     {
         LOG_WRITE "Application not installed:" $InstallFile
         WriteInEventLog 1 Information "Application not installed:" $InstallFile "Nothing to do here."
     }
     else 
     {
-        Remove-AppxPackage -Package $Global:AppxFullName -ErrorAction 'SilentlyContinue'
+        Remove-AppxPackage -Package $appxEntry.PackageFullName -ErrorAction 'SilentlyContinue'
 
-        LOG_WRITE "Removing application:" $Global:AppxName
-        WriteInEventLog 1 Information "Removing application:" $Global:AppxName "Removing in progress."
+        LOG_WRITE "Removing application:" $appxEntry.Name
+        WriteInEventLog 1 Information "Removing application:" $appxEntry.Name "Removing in progress."
 
-        DETECT_APPX $InstallName
+        $appxEntry = DETECT_APPX $InstallName
 
-        If ([string]::IsNullOrEmpty($Global:scanAppx))
+        If ([string]::IsNullOrEmpty($appxEntry))
         {
             LOG_WRITE "Removing success:" $InstallFile
             WriteInEventLog 1 Information "Removing success:" $InstallFile "This application is gone."
         }
         else 
         {
-            $Global:Err_Return = 1
+            $Global:Err_Return++
             LOG_WRITE "Removing failed:" $InstallFile
             WriteInEventLog 3 Error "Removing failed:" $InstallFile "There is a problem here !"
         }
@@ -320,11 +330,11 @@ Function EXECUTE_UNINSTALL_APPX($InstallName)
 # MSI Uninstall
 Function EXECUTE_UNINSTALL_MSI($Product_Code, $Parameters, $ProductCode, $Registry_Key, $File_Check, $Tempo, $regPart)
 {
-	DETECT_INSTALLATION $ProductCode $Registry_Key $File_Check $regPart
+	$InstallTable = DETECT_INSTALLATION $ProductCode $Registry_Key $File_Check $regPart
 
 	if ($Global:Err_Return -eq 0) 
 	{
-		if (($Global:FileDetect -eq $true -OR $Global:KeyDetect -eq $true -OR $Global:ProductCodeDetect -eq $true) -OR ($Global:Key_ToCheck_isEmpty -eq $true -AND $Global:File_ToCheck_isEmpty -eq $true -AND $Global:ProductCode_ToCheck_isEmpty -eq $true)) 
+		if (($InstallTable.FileDetect -eq $true -OR $InstallTable.KeyDetect -eq $true -OR $InstallTable.ProductCodeDetect -eq $true) -OR ($InstallTable.Key_ToCheck_isEmpty -eq $true -AND $InstallTable.File_ToCheck_isEmpty -eq $true -AND $InstallTable.ProductCode_ToCheck_isEmpty -eq $true)) 
 		{
 			LOG_WRITE "Removing Application:" $Product_Code
 			WriteInEventLog 1 Information "Removing Application:" $Product_Code "Removing in progress."
@@ -337,16 +347,16 @@ Function EXECUTE_UNINSTALL_MSI($Product_Code, $Parameters, $ProductCode, $Regist
 			LOG_WRITE "Wait required:" $Tempo " seconds"
 			Start-Sleep -s $Tempo
 
-			DETECT_INSTALLATION $ProductCode $Registry_Key $File_Check $regPart
+			$InstallTable = DETECT_INSTALLATION $ProductCode $Registry_Key $File_Check $regPart
 
-			if (($Global:FileDetect -eq $false -AND $Global:KeyDetect -eq $false -AND $Global:ProductCodeDetect -eq $false) -OR ($Global:Key_ToCheck_isEmpty -eq $true -AND $Global:File_ToCheck_isEmpty -eq $true -AND $Global:ProductCode_ToCheck_isEmpty -eq $true)) 
+			if (($InstallTable.FileDetect -eq $false -AND $InstallTable.KeyDetect -eq $false -AND $InstallTable.ProductCodeDetect -eq $false) -OR ($InstallTable.Key_ToCheck_isEmpty -eq $true -AND $InstallTable.File_ToCheck_isEmpty -eq $true -AND $InstallTable.ProductCode_ToCheck_isEmpty -eq $true)) 
 			{
 				LOG_WRITE "Removing success:" $Product_Code
 				WriteInEventLog 1 Information "Removing success:" $Product_Code "Removing success."
 			}
 			else 
 			{
-				$Global:Err_Return = 1
+				$Global:Err_Return++
 				LOG_WRITE "Removing failed:" $Product_Code
 				WriteInEventLog 3 Error "Removing failed:" $Product_Code "Oh no ! There is a problem here !"
 			}
@@ -363,11 +373,11 @@ Function EXECUTE_UNINSTALL_MSI($Product_Code, $Parameters, $ProductCode, $Regist
 # EXE Migration
 Function EXECUTE_UNINSTALL_EXE($RemoveExe, $Parameters, $Registry_Key, $File_Check, $Tempo, $regPart)
 {
-	DETECT_INSTALLATION "" $Registry_Key $File_Check $regPart
+	$InstallTable = DETECT_INSTALLATION "" $Registry_Key $File_Check $regPart
 
 	if ($Global:Err_Return -eq 0) 
 	{
-		if (($Global:FileDetect -eq $true -OR $Global:KeyDetect -eq $true) -OR ($Global:Key_ToCheck_isEmpty -eq $true -AND $Global:File_ToCheck_isEmpty -eq $true))
+		if (($InstallTable.FileDetect -eq $true -OR $InstallTable.KeyDetect -eq $true) -OR ($InstallTable.Key_ToCheck_isEmpty -eq $true -AND $InstallTable.File_ToCheck_isEmpty -eq $true))
 		{
 			LOG_WRITE "Removing application:" $RemoveExe
 			WriteInEventLog 1 Information "Removing application:" $RemoveExe "Removing in progress."
@@ -378,16 +388,16 @@ Function EXECUTE_UNINSTALL_EXE($RemoveExe, $Parameters, $Registry_Key, $File_Che
 			LOG_WRITE "Wait required:" $Tempo " seconds"
 			Start-Sleep -s $Tempo
 
-			DETECT_INSTALLATION "" $Registry_Key $File_Check $regPart
+			$InstallTable = DETECT_INSTALLATION "" $Registry_Key $File_Check $regPart
 
-			if (($Global:FileDetect -eq $false -AND $Global:KeyDetect -eq $false) -OR ($Global:Key_ToCheck_isEmpty -eq $true -AND $Global:File_ToCheck_isEmpty -eq $true)) 
+			if (($InstallTable.FileDetect -eq $false -AND $InstallTable.KeyDetect -eq $false) -OR ($InstallTable.Key_ToCheck_isEmpty -eq $true -AND $InstallTable.File_ToCheck_isEmpty -eq $true)) 
 			{
 				LOG_WRITE "Removing success:" $RemoveExe
 				WriteInEventLog 1 Information "Removing success:" $RemoveExe "Good job !"
 			}
 			else 
 			{
-				$Global:Err_Return = 1
+				$Global:Err_Return++
 				LOG_WRITE "Removing failed:" $RemoveExe
 				WriteInEventLog 3 Error "Removing failed:" $RemoveExe "Something gone wrong here."
 			}
